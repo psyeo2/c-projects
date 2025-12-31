@@ -24,18 +24,28 @@ void activate_cell(int *p_grid, int rows, int cols, Sint32 x, Sint32 y)
     p_grid[r * cols + c] = 1;
 }
 
-// refactor to draw rows*long vertical lines and cols*long horizontal lines instead of lines per square
 void draw_grid_lines(SDL_Surface *p_surface, Uint32 colour, int rows, int cols)
 {
+    SDL_Rect horizontal_line;
+    SDL_Rect vertical_line;
+
+    horizontal_line.w = WIDTH;
+    horizontal_line.h = 1;
+    horizontal_line.x = 0;
+
+    vertical_line.w = 1;
+    vertical_line.h = HEIGHT;
+    vertical_line.y = 0;
+
     for (int r = 0; r < rows - 1; r++)
     {
-        for (int c = 0; c < cols - 1; c++)
-        {
-            SDL_Rect horizontal_line = (SDL_Rect){CELL_SIZE * c, CELL_SIZE * r, CELL_SIZE, 1};
-            SDL_Rect vertical_line = (SDL_Rect){CELL_SIZE * c, CELL_SIZE * r, 1, CELL_SIZE};
-            SDL_FillRect(p_surface, &horizontal_line, colour);
-            SDL_FillRect(p_surface, &vertical_line, colour);
-        }
+        horizontal_line.y = CELL_SIZE * r;
+        SDL_FillRect(p_surface, &horizontal_line, colour);
+    }
+    for (int c = 0; c < cols - 1; c++)
+    {
+        vertical_line.x = CELL_SIZE * c;
+        SDL_FillRect(p_surface, &vertical_line, colour);
     }
 }
 
