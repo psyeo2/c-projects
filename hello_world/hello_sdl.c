@@ -4,28 +4,33 @@
 #define WIDTH 900
 #define HEIGHT 600
 
+typedef enum
+{
+    INIT,
+    RUNNING,
+    PAUSED,
+    QUIT
+} State;
+
 int main()
 {
-    SDL_Window *pWindow = SDL_CreateWindow("Hello World", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
-    SDL_Surface *pSurface = SDL_GetWindowSurface(pWindow);
-    
-    SDL_Rect rect = (SDL_Rect) {50,50,50,50};
-    Uint32 colour = 0x00FF00;
-    SDL_FillRect(pSurface, &rect, colour);
+    SDL_Window *p_window = SDL_CreateWindow("Hello World!", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
+    SDL_Surface *p_surface = SDL_GetWindowSurface(p_window);
 
     SDL_Event event;
-    int app_running = 1;
-    while(app_running)
+
+    State state = RUNNING;
+    while (state != QUIT)
     {
-	while(SDL_PollEvent(&event))
-	{
-        if(event.type == SDL_QUIT)
-	    {
-		app_running = 0;
-	    }
-	}
-	SDL_UpdateWindowSurface(pWindow);
-	SDL_Delay(16);
+        while (SDL_PollEvent(&event))
+        {
+            if (event.type == SDL_QUIT || (event.type = SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE))
+            {
+                state = QUIT;
+            }
+        }
+        SDL_UpdateWindowSurface(p_window);
+        SDL_Delay(16);
     }
 
     return 0;
