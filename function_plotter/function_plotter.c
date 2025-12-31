@@ -1,5 +1,7 @@
 #include <stdio.h>
+#include <math.h>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #include "tinyexpr.h"
 
 #define WIDTH 900
@@ -68,29 +70,98 @@ int y_for_all_x(char *expression, double *graph_ys, double scale)
     }
 }
 
-void draw_line(SDL_Surface *p_surface, double *graph_ys, Uint32 colour, double scale)
+// void draw_line(SDL_Surface *p_surface, double *graph_ys, Uint32 colour, double scale)
+// {
+//     SDL_Rect pixel;
+//     pixel.h = 1;
+//     pixel.w = 1;
+
+//     for (int i = 0; i < WIDTH; i++)
+//     {
+//         int x1 = i;
+//         int y1 = graph_y_to_pixel_y(graph_ys[i], scale);
+//         int x2 = i + 1;
+//         int y2 = graph_y_to_pixel_y(graph_ys[i + 1], scale);
+
+//         double m = (y2 - y1) / (x2 - x1);
+//         double c = y1 - m * x1;
+
+//         for (int y = y1; y < y2; y++)
+//         {
+//             pixel.y = y;
+//             double given_x = (y - c) / m;
+//             pixel.x = (int)given_x
+//         }
+//     }
+// }
+
+void draw_line(SDL_Surface *surface,
+               int x0, int y0,
+               int x1, int y1,
+               Uint32 colour)
 {
-    for (int i = 0; i < WIDTH; i++)
+    int dx = abs(x1 - x0);
+    int sx = x0 < x1 ? 1 : -1;
+    int dy = -abs(y1 - y0);
+    int sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy;
+
+    while (1)
     {
-        int x1 = i;
-        int y1 = graph_y_to_pixel_y(graph_ys[i], scale);
-        int x2 = i + 1;
-        int y2 = graph_y_to_pixel_y(graph_ys[i + 1], scale);
+        if (x0 >= 0 && x0 < WIDTH && y0 >= 0 && y0 < HEIGHT)
+        {
+            SDL_Rect p = {x0, y0, 1, 1};
+            SDL_FillRect(surface, &p, colour);
+        }
+
+        if (x0 == x1 && y0 == y1)
+            break;
+
+        int e2 = 2 * err;
+        if (e2 >= dy)
+        {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx)
+        {
+            err += dx;
+            y0 += sy;
+        }
     }
 }
 
 void plot_function(SDL_Surface *p_surface, double *graph_ys, Uint32 colour, double scale)
 {
-    SDL_Rect pixel;
-    pixel.h = 1;
-    pixel.w = 1;
-
-    for (int i = 0; i < WIDTH; i++)
+    for (int i = 1; i < WIDTH; i++)
     {
-        // pixel.x = graph_x_to_pixel_x(graph_xs[i], scale);
-        pixel.x = i;
-        pixel.y = graph_y_to_pixel_y(graph_ys[i], scale);
-        SDL_FillRect(p_surface, &pixel, colour);
+        if (!isfinite(graph_ys[i]) || !isfinite(graph_ys[i - 1]))
+            continue;
+
+        int y0 = graph_y_to_pixel_y(graph_ys[i - 1], scale);
+        int y1 = graph_y_to_pixel_y(graph_ys[i], scale);
+
+        if (abs(y1 - y0) > HEIGHT)
+        {
+            int edge_y;
+
+            if (y1 > y0)
+                edge_y = HEIGHT - 1; // going down
+            else
+                edge_y = 0; // going up
+
+            draw_line(p_surface,
+                      i - 1, y0,
+                      i - 1, edge_y,
+                      colour);
+
+            continue;
+        }
+
+        draw_line(p_surface,
+                  i - 1, y0,
+                  i, y1,
+                  colour);
     }
 }
 
@@ -102,6 +173,18 @@ int main(int argc, char *argv[])
         return 1;
     }
     char *expression = argv[1];
+
+    if (TTF_Init() != 0)
+    {
+        printf("TTF Error\n");
+        return 1;
+    }
+    TTF_Font *font = TTF_OpenFont("font.ttf", 16);
+    if (!font)
+    {
+        printf("Load font error: %s\n", TTF_GetError());
+        return 1;
+    }
 
     double scale = 0.05;
 
@@ -127,6 +210,9 @@ int main(int argc, char *argv[])
 
     SDL_Event event;
 
+    char scale_text[100];
+    sprintf(scale_text, "%.3f", 1.0 / scale);
+
     State state = RUNNING;
     while (state != QUIT)
     {
@@ -148,6 +234,7 @@ int main(int argc, char *argv[])
                     scale *= 0.8;
                 }
                 y_for_all_x(expression, &graph_ys[0], scale);
+                sprintf(scale_text, "%.3f", 1.0 / scale);
                 // printf("Scale = %f\n", scale);
             }
         }
@@ -156,8 +243,14 @@ int main(int argc, char *argv[])
         plot_axes(p_surface, grey);
         plot_function(p_surface, &graph_ys[0], white, scale);
 
+        SDL_Color white = {255, 255, 255, 255};
+        SDL_Surface *text_surface = TTF_RenderText_Blended(font, scale_text, white);
+        SDL_Rect dst = {10, 10, text_surface->w, text_surface->h};
+        SDL_BlitSurface(text_surface, NULL, p_surface, &dst);
+
         SDL_UpdateWindowSurface(p_window);
         SDL_Delay(16);
+        SDL_FreeSurface(text_surface);
     }
 
     return 0;
