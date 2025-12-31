@@ -1,0 +1,1 @@
+gcc -Wall -Wextra -o game_of_life game_of_life.c `sdl2-config --cflags --libs` -lSDL2_ttf

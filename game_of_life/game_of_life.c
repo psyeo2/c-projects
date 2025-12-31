@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
 
     srand(time(NULL));
 
-    SDL_Window *pWindow = SDL_CreateWindow(
+    SDL_Window *p_window = SDL_CreateWindow(
         "Conway's Game of Life",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
         HEIGHT,
         0);
 
-    SDL_Surface *p_surface = SDL_GetWindowSurface(pWindow);
+    SDL_Surface *p_surface = SDL_GetWindowSurface(p_window);
 
     Uint32 black = SDL_MapRGB(p_surface->format, 0, 0, 0);
     // Uint32 white = SDL_MapRGB(p_surface->format, 255, 255, 255);
@@ -249,7 +249,7 @@ int main(int argc, char *argv[])
         SDL_Rect dst = {10, 10, text_surface->w, text_surface->h};
         SDL_BlitSurface(text_surface, NULL, p_surface, &dst);
 
-        SDL_UpdateWindowSurface(pWindow);
+        SDL_UpdateWindowSurface(p_window);
         SDL_Delay(state == INIT ? 16 : frame_delay);
         SDL_FreeSurface(text_surface);
     }
