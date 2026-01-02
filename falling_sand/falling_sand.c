@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <SDL2/SDL.h>
 #include <time.h>
 
@@ -9,6 +10,7 @@
 typedef enum
 {
     AIR,
+    BOUNDARY,
     WALL,
     SAND,
     WATER
@@ -22,7 +24,7 @@ typedef enum
     QUIT
 } State;
 
-void modify_sand(int radius, Sint32 x, Sint32 y, int *p_cells, int rows, int cols, int create)
+void modify_cells(int radius, Sint32 x, Sint32 y, Material *p_cells, int rows, int cols, Material material)
 {
     int cell_x = x / CELL_SIZE;
     int cell_y = y / CELL_SIZE;
@@ -46,20 +48,22 @@ void modify_sand(int radius, Sint32 x, Sint32 y, int *p_cells, int rows, int col
             int dx = c - cell_x;
             if (dx * dx + dy * dy <= radius * radius)
             {
-                p_cells[r * cols + c] = create;
+                if (material != BOUNDARY)
+                    p_cells[r * cols + c] = material;
             }
         }
     }
 }
 
-void update_cells(int *p_cells, int *p_next_cells, int rows, int cols)
+void update_cells(Material *p_cells, Material *p_next_cells, int rows, int cols)
 {
-    memset(p_next_cells, 0, rows * cols * sizeof(int));
-    for (int c = 0; c < cols; c++)
-    {
-        p_next_cells[(rows - 1) * cols + c] = 1;
-    }
+    // memset(p_next_cells, 0, rows * cols * sizeof(Material));
+    // for (int c = 0; c < cols; c++)
+    // {
+    //     p_next_cells[(rows - 1) * cols + c] = BOUNDARY;
+    // }
 
+    int direction = 0;
     for (int r = rows - 2; r >= 0; r--)
     {
         int start = (r & 1) ? cols - 1 : 0;
@@ -67,47 +71,116 @@ void update_cells(int *p_cells, int *p_next_cells, int rows, int cols)
 
         for (int c = start; c >= 0 && c < cols; c += step)
         {
-            if (!p_cells[r * cols + c])
-                continue;
+            Material material = p_cells[r * cols + c];
 
-            if (!p_cells[(r + 1) * cols + c] && !p_next_cells[(r + 1) * cols + c])
+            if (material == AIR)
+                continue;
+            if (material == WALL)
             {
-                p_cells[r * cols + c] = 0;
-                p_next_cells[(r + 1) * cols + c] = 1;
+                p_next_cells[r * cols + c] = WALL;
+                continue;
             }
-            else if (c + 1 < cols && !p_cells[(r + 1) * cols + c + 1] && !p_next_cells[(r + 1) * cols + c + 1])
+
+            direction = ((rand() >> 8) & 1) ? 1 : -1;
+            if (material == SAND)
             {
-                p_cells[r * cols + c] = 0;
-                p_next_cells[(r + 1) * cols + c + 1] = 1;
+                if (p_cells[(r + 1) * cols + c] == AIR && p_next_cells[(r + 1) * cols + c] == AIR)
+                {
+                    p_cells[r * cols + c] = AIR;
+                    p_next_cells[(r + 1) * cols + c] = SAND;
+                }
+                else if ((c + 1 < cols && c - 1 >= 0) && p_cells[(r + 1) * cols + c + direction] == AIR && p_next_cells[(r + 1) * cols + c + direction] == AIR)
+                {
+                    p_cells[r * cols + c] = AIR;
+                    p_next_cells[(r + 1) * cols + c + direction] = SAND;
+                }
+                else if ((c + 1 < cols && c - 1 >= 0) && p_cells[(r + 1) * cols + c - direction] == AIR && p_next_cells[(r + 1) * cols + c - direction] == AIR)
+                {
+                    p_cells[r * cols + c] = AIR;
+                    p_next_cells[(r + 1) * cols + c - direction] = SAND;
+                }
+                else
+                {
+                    p_next_cells[r * cols + c] = SAND;
+                }
             }
-            else if (c - 1 >= 0 && !p_cells[(r + 1) * cols + c - 1] && !p_next_cells[(r + 1) * cols + c - 1])
+            else if (material == WATER)
             {
-                p_cells[r * cols + c] = 0;
-                p_next_cells[(r + 1) * cols + c - 1] = 1;
-            }
-            else
-            {
-                p_next_cells[r * cols + c] = 1;
+                if (p_cells[(r + 1) * cols + c] != AIR && p_next_cells[r * cols + c - 1] != AIR && p_next_cells[r * cols + c - 1] != AIR)
+                {
+                    p_next_cells[r * cols + c] = WATER;
+                }
+
+                int left_cells = 0;
+                Material left_cell = p_next_cells[r * cols + c - 1];
+                while (left_cell == AIR)
+                {
+                    left_cells++;
+                    left_cell = p_next_cells[r * cols + c - 1 - left_cells];
+                }
+                int right_cells = 0;
+                Material right_cell = p_next_cells[r * cols + c + 1];
+                while (right_cell == AIR)
+                {
+                    right_cells++;
+                    right_cell = p_next_cells[r * cols + c + 1 + right_cells];
+                }
+
+                if (left_cells > right_cells)
+                {
+                    p_cells[r * cols + c] = AIR;
+                    p_next_cells[r * cols + c - 1] = WATER;
+                }
+                else if (right_cells > left_cells)
+                {
+                    p_cells[r * cols + c] = AIR;
+                    p_next_cells[r * cols + c + 1] = WATER;
+                }
+                else
+                {
+                    p_cells[r * cols + c] = AIR;
+                    p_next_cells[r * cols + c + (((rand() >> 8) & 1) ? 1 : -1)] = WATER;
+                }
             }
         }
     }
 }
 
-void draw_sand(SDL_Surface *p_surface, int *cells, int rows, int cols, Uint32 colour)
+Uint32 get_material_colour(Material material)
+{
+    switch (material)
+    {
+    case (BOUNDARY):
+        return 0xFFFFFF;
+    case (WALL):
+        return 0xFFFFFF;
+    case (SAND):
+        return 0xC80A0A;
+    case (WATER):
+        return 0x0000AA;
+    default:
+        return 0;
+    }
+}
+
+void draw_cells(SDL_Surface *p_surface, Material *cells, int rows, int cols)
 {
     SDL_Rect cell;
     cell.w = CELL_SIZE;
     cell.h = CELL_SIZE;
 
+    Uint32 cell_colour = 0;
+
     for (int r = 0; r < rows; r++)
     {
         for (int c = 0; c < cols; c++)
         {
-            if (cells[r * cols + c])
+            if (cells[r * cols + c] != AIR)
             {
                 cell.x = c * CELL_SIZE;
                 cell.y = r * CELL_SIZE;
-                SDL_FillRect(p_surface, &cell, colour);
+                cell_colour = get_material_colour(cells[r * cols + c]);
+                SDL_FillRect(p_surface, &cell, cell_colour);
             }
         }
     }
@@ -118,17 +191,20 @@ int main()
     int rows = HEIGHT / CELL_SIZE + 1;
     int cols = WIDTH / CELL_SIZE;
 
-    int *p_cells;
-    int *p_next_cells;
-    int *tmp = NULL;
+    Material *p_cells;
+    Material *p_next_cells;
+    Material *tmp = NULL;
 
-    p_cells = calloc(rows*cols, sizeof(int));
-    p_next_cells = calloc(rows*cols, sizeof(int));
+    p_cells = malloc(rows * cols * sizeof(Material));
+    p_next_cells = malloc(rows * cols * sizeof(Material));
+
+    memset(p_cells, AIR, rows * cols * sizeof(Material));
+    memset(p_next_cells, AIR, rows * cols * sizeof(Material));
 
     for (int c = 0; c < cols; c++)
     {
-        p_cells[(rows - 1) * cols + c] = 1;
-        p_next_cells[(rows - 1) * cols + c] = 1;
+        p_cells[(rows - 1) * cols + c] = BOUNDARY;
+        p_next_cells[(rows - 1) * cols + c] = BOUNDARY;
     }
 
     srand(time(NULL));
@@ -137,10 +213,12 @@ int main()
     SDL_Surface *p_surface = SDL_GetWindowSurface(p_window);
 
     Uint32 black = SDL_MapRGB(p_surface->format, 0, 0, 0);
-    Uint32 claret = SDL_MapRGB(p_surface->format, 200, 10, 10);
+    // Uint32 claret = SDL_MapRGB(p_surface->format, 200, 10, 10);
 
-    int placing_sand = 0;
-    int destroying_sand = 0;
+    Material material = SAND;
+    int radius = 25;
+    int placing = 0;
+    int destroying = 0;
     Uint8 button = 0;
     Sint32 mouse_x = 0;
     Sint32 mouse_y = 0;
@@ -164,11 +242,11 @@ int main()
                 button = event.button.button;
                 if (button == 1)
                 {
-                    placing_sand = 1;
+                    placing = 1;
                 }
                 else if (button == 3)
                 {
-                    destroying_sand = 1;
+                    destroying = 1;
                 }
             }
             if (event.type == SDL_MOUSEBUTTONUP)
@@ -176,26 +254,46 @@ int main()
                 button = event.button.button;
                 if (button == 1)
                 {
-                    placing_sand = 0;
+                    placing = 0;
                 }
                 else if (button == 3)
                 {
-                    destroying_sand = 0;
+                    destroying = 0;
                 }
             }
             if (event.type == SDL_KEYDOWN)
             {
+                if (event.key.keysym.sym == SDLK_r)
+                {
+                    memset(p_cells, AIR, rows * cols * sizeof(Material));
+                    memset(p_next_cells, AIR, rows * cols * sizeof(Material));
+                }
+                if (event.key.keysym.sym == SDLK_s)
+                {
+                    material = SAND;
+                    radius = 25;
+                }
+                else if (event.key.keysym.sym == SDLK_l)
+                {
+                    material = WATER;
+                    radius = 10;
+                }
+                else if (event.key.keysym.sym == SDLK_b)
+                {
+                    material = WALL;
+                    radius = 1;
+                }
             }
         }
         SDL_FillRect(p_surface, NULL, black);
 
-        if (placing_sand)
+        if (placing)
         {
-            modify_sand(25, mouse_x, mouse_y, p_cells, rows, cols, 1);
+            modify_cells(radius, mouse_x, mouse_y, p_cells, rows, cols, material);
         }
-        if (destroying_sand)
+        if (destroying)
         {
-            modify_sand(25, mouse_x, mouse_y, p_cells, rows, cols, 0);
+            modify_cells(25, mouse_x, mouse_y, p_cells, rows, cols, AIR);
         }
 
         update_cells(p_cells, p_next_cells, rows, cols);
@@ -203,7 +301,7 @@ int main()
         p_cells = p_next_cells;
         p_next_cells = tmp;
 
-        draw_sand(p_surface, p_cells, rows, cols, claret);
+        draw_cells(p_surface, p_cells, rows, cols);
 
         SDL_UpdateWindowSurface(p_window);
         SDL_Delay(8);
