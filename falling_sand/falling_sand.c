@@ -5,7 +5,7 @@
 
 #define WIDTH 900
 #define HEIGHT 600
-#define CELL_SIZE 2
+#define CELL_SIZE 3
 
 typedef enum
 {
@@ -23,6 +23,11 @@ typedef enum
     PAUSED,
     QUIT
 } State;
+
+// typedef struct
+// {
+
+// } Basin;
 
 void modify_cells(int radius, Sint32 x, Sint32 y, Material *p_cells, int rows, int cols, Material material)
 {
@@ -55,13 +60,102 @@ void modify_cells(int radius, Sint32 x, Sint32 y, Material *p_cells, int rows, i
     }
 }
 
+void handle_sand(Material *p_cells, Material *p_next_cells, int cols, int r, int c, int direction)
+{
+    if (p_cells[(r + 1) * cols + c] == AIR && p_next_cells[(r + 1) * cols + c] == AIR)
+    {
+        p_cells[r * cols + c] = AIR;
+        p_next_cells[(r + 1) * cols + c] = SAND;
+    }
+    else if (p_cells[(r + 1) * cols + c] == WATER && p_next_cells[(r + 1) * cols + c] == WATER)
+    {
+        p_cells[r * cols + c] = WATER;
+        p_next_cells[(r + 1) * cols + c] = SAND;
+    }
+    else if (c + 1 < cols && c - 1 >= 0 && p_cells[(r + 1) * cols + c + direction] == AIR && p_next_cells[(r + 1) * cols + c + direction] == AIR)
+    {
+        p_cells[r * cols + c] = AIR;
+        p_next_cells[(r + 1) * cols + c + direction] = SAND;
+    }
+    else if (c + 1 < cols && c - 1 >= 0 && p_cells[(r + 1) * cols + c - direction] == AIR && p_next_cells[(r + 1) * cols + c - direction] == AIR)
+    {
+        p_cells[r * cols + c] = AIR;
+        p_next_cells[(r + 1) * cols + c - direction] = SAND;
+    }
+    else
+    {
+        p_next_cells[r * cols + c] = SAND;
+    }
+}
+
+void handle_water(Material *p_cells, Material *p_next_cells, int rows, int cols, int r, int c)
+{
+    int src = r * cols + c;
+
+    // Down
+    if (r + 1 < rows)
+    {
+        int b = (r + 1) * cols + c;
+        if (p_cells[b] == AIR && p_next_cells[b] == AIR)
+        {
+            p_next_cells[b] = WATER;
+            p_next_cells[src] = AIR;
+            p_cells[src] = AIR;
+            return;
+        }
+    }
+
+    int can_left = (c > 0);
+    int can_right = (c + 1 < cols);
+
+    int left = r * cols + (c - 1);
+    int right = r * cols + (c + 1);
+
+    int first = rand() & 1;
+
+    if (first)
+    {
+        if (can_left && p_cells[left] == AIR && p_next_cells[left] == AIR)
+        {
+            p_next_cells[left] = WATER;
+            p_next_cells[src] = AIR;
+            p_cells[src] = AIR;
+            return;
+        }
+        if (can_right && p_cells[right] == AIR && p_next_cells[right] == AIR)
+        {
+            p_next_cells[right] = WATER;
+            p_next_cells[src] = AIR;
+            p_cells[src] = AIR;
+            return;
+        }
+    }
+    else
+    {
+        if (can_right && p_cells[right] == AIR && p_next_cells[right] == AIR)
+        {
+            p_next_cells[right] = WATER;
+            p_next_cells[src] = AIR;
+            p_cells[src] = AIR;
+            return;
+        }
+        if (can_left && p_cells[left] == AIR && p_next_cells[left] == AIR)
+        {
+            p_next_cells[left] = WATER;
+            p_next_cells[src] = AIR;
+            p_cells[src] = AIR;
+            return;
+        }
+    }
+
+    p_next_cells[src] = WATER;
+}
+
 void update_cells(Material *p_cells, Material *p_next_cells, int rows, int cols)
 {
-    // memset(p_next_cells, 0, rows * cols * sizeof(Material));
+    // memset(p_next_cells, AIR, rows * cols * sizeof(Material));
     // for (int c = 0; c < cols; c++)
-    // {
     //     p_next_cells[(rows - 1) * cols + c] = BOUNDARY;
-    // }
 
     int direction = 0;
     for (int r = rows - 2; r >= 0; r--)
@@ -72,75 +166,20 @@ void update_cells(Material *p_cells, Material *p_next_cells, int rows, int cols)
         for (int c = start; c >= 0 && c < cols; c += step)
         {
             Material material = p_cells[r * cols + c];
-
-            if (material == AIR)
-                continue;
-            if (material == WALL)
+            switch (material)
             {
+            case AIR:
+                break;
+            case WALL:
                 p_next_cells[r * cols + c] = WALL;
-                continue;
-            }
-
-            direction = ((rand() >> 8) & 1) ? 1 : -1;
-            if (material == SAND)
-            {
-                if (p_cells[(r + 1) * cols + c] == AIR && p_next_cells[(r + 1) * cols + c] == AIR)
-                {
-                    p_cells[r * cols + c] = AIR;
-                    p_next_cells[(r + 1) * cols + c] = SAND;
-                }
-                else if ((c + 1 < cols && c - 1 >= 0) && p_cells[(r + 1) * cols + c + direction] == AIR && p_next_cells[(r + 1) * cols + c + direction] == AIR)
-                {
-                    p_cells[r * cols + c] = AIR;
-                    p_next_cells[(r + 1) * cols + c + direction] = SAND;
-                }
-                else if ((c + 1 < cols && c - 1 >= 0) && p_cells[(r + 1) * cols + c - direction] == AIR && p_next_cells[(r + 1) * cols + c - direction] == AIR)
-                {
-                    p_cells[r * cols + c] = AIR;
-                    p_next_cells[(r + 1) * cols + c - direction] = SAND;
-                }
-                else
-                {
-                    p_next_cells[r * cols + c] = SAND;
-                }
-            }
-            else if (material == WATER)
-            {
-                if (p_cells[(r + 1) * cols + c] != AIR && p_next_cells[r * cols + c - 1] != AIR && p_next_cells[r * cols + c - 1] != AIR)
-                {
-                    p_next_cells[r * cols + c] = WATER;
-                }
-
-                int left_cells = 0;
-                Material left_cell = p_next_cells[r * cols + c - 1];
-                while (left_cell == AIR)
-                {
-                    left_cells++;
-                    left_cell = p_next_cells[r * cols + c - 1 - left_cells];
-                }
-                int right_cells = 0;
-                Material right_cell = p_next_cells[r * cols + c + 1];
-                while (right_cell == AIR)
-                {
-                    right_cells++;
-                    right_cell = p_next_cells[r * cols + c + 1 + right_cells];
-                }
-
-                if (left_cells > right_cells)
-                {
-                    p_cells[r * cols + c] = AIR;
-                    p_next_cells[r * cols + c - 1] = WATER;
-                }
-                else if (right_cells > left_cells)
-                {
-                    p_cells[r * cols + c] = AIR;
-                    p_next_cells[r * cols + c + 1] = WATER;
-                }
-                else
-                {
-                    p_cells[r * cols + c] = AIR;
-                    p_next_cells[r * cols + c + (((rand() >> 8) & 1) ? 1 : -1)] = WATER;
-                }
+                break;
+            case SAND:
+                direction = ((rand() >> 8) & 1) ? 1 : -1;
+                handle_sand(p_cells, p_next_cells, cols, r, c, direction);
+                break;
+            case WATER:
+                handle_water(p_cells, p_next_cells, rows, cols, r, c);
+                break;
             }
         }
     }
@@ -272,11 +311,13 @@ int main()
                 {
                     material = SAND;
                     radius = 25;
+                    // radius = 1;
                 }
                 else if (event.key.keysym.sym == SDLK_l)
                 {
                     material = WATER;
                     radius = 10;
+                    // radius = 1;
                 }
                 else if (event.key.keysym.sym == SDLK_b)
                 {
@@ -294,6 +335,7 @@ int main()
         if (destroying)
         {
             modify_cells(25, mouse_x, mouse_y, p_cells, rows, cols, AIR);
+            // modify_cells(3, mouse_x, mouse_y, p_cells, rows, cols, AIR);
         }
 
         update_cells(p_cells, p_next_cells, rows, cols);
