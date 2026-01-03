@@ -1,0 +1,1 @@
+gcc -o falling_sand falling_sand.c `sdl2-config --cflags --libs`
