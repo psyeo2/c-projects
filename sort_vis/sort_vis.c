@@ -23,6 +23,7 @@ typedef struct
     int i;
     int j;
     int swapped;
+    int done;
 } BubbleState;
 
 int rand_in_range(int min, int max)
@@ -74,7 +75,7 @@ void render_list(SDL_Surface *p_surface, int *list, Uint32 *colours)
         double height = (list[i] / (double)BARS) * HEIGHT;
         bar.h = (int)height;
         bar.y = HEIGHT - bar.h;
-        SDL_FillRect(p_surface, &bar, colours[list[i]] - 1);
+        SDL_FillRect(p_surface, &bar, colours[list[i]-1]);
     }
 }
 
@@ -105,10 +106,11 @@ BubbleState init_bubble_state(int *list)
     s.i = BARS;
     s.j = 0;
     s.swapped = 0;
+    s.done = 0;
     return s;
 }
 
-int step_bubble_state(BubbleState *s)
+void step_bubble_state(BubbleState *s)
 {
     if (s->j < s->i - 1 && s->list[s->j] > s->list[s->j + 1])
     {
@@ -123,7 +125,7 @@ int step_bubble_state(BubbleState *s)
         s->j++;
     }    
 
-    if (s->j == s->i - 2 && s->swapped && s->i <= 1)
+    if (s->j == s->i - 1 && s->swapped && s->i > 1)
     {
         s->j = 0;
         s->i--;
@@ -131,10 +133,12 @@ int step_bubble_state(BubbleState *s)
     }
     else if (s->j == s->i - 1 && !s->swapped)
     {
-        return 1;
+        s->done = 1;
     }
-
-    return 0;
+    else
+    {
+        s->done = 0;
+    }
 }
 
 int main()
@@ -150,6 +154,8 @@ int main()
 
     SDL_Event event;
 
+    BubbleState s = init_bubble_state(list);
+
     Uint32 black = SDL_MapRGB(p_surface->format, 0, 0, 0);
     State state = RUNNING;
     while (state != QUIT)
@@ -163,12 +169,13 @@ int main()
         }
         SDL_FillRect(p_surface, NULL, black);
 
-        BubbleState s = init_bubble_state(list);
+        if (!s.done)
+            step_bubble_state(&s);
 
         render_list(p_surface, list, colours);
 
         SDL_UpdateWindowSurface(p_window);
-        SDL_Delay(16);
+        // SDL_Delay(1);
     }
 
     return 0;
