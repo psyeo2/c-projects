@@ -19,16 +19,18 @@ int main()
 
     SDL_Event event;
 
+    Uint32 black = SDL_MapRGB(p_surface->format, 0, 0, 0);
     State state = RUNNING;
     while (state != QUIT)
     {
         while (SDL_PollEvent(&event))
         {
-            if (event.type == SDL_QUIT || (event.type = SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE))
+            if (event.type == SDL_QUIT || (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE))
             {
                 state = QUIT;
             }
         }
+        SDL_FillRect(p_surface, NULL, black);
         SDL_UpdateWindowSurface(p_window);
         SDL_Delay(16);
     }
