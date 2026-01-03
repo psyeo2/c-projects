@@ -20,7 +20,8 @@ typedef enum
 typedef enum
 {
     BUBBLE,
-    INSERTION
+    INSERTION,
+    SELECTION
 } SortType;
 
 typedef struct
@@ -40,6 +41,15 @@ typedef struct
     int key;
     int done;
 } InsertionState;
+
+typedef struct
+{
+    int *list;
+    int i;
+    int j;
+    int min_idx;
+    int done;
+} SelectionState;
 
 int rand_in_range(int min, int max)
 {
@@ -114,6 +124,52 @@ void bubble_sort(int *list)
     }
 }
 
+void apparently_not_insertion_sort(int *list)
+{
+    for (int i = 1; i < BARS; i++)
+    {
+        int j = i;
+        while (j > 0 && list[j] < list[j - 1])
+        {
+            int tmp = list[j];
+            list[j] = list[j - 1];
+            list[j - 1] = tmp;
+            j--;
+        }
+    }
+}
+
+void insertion_sort(int *list)
+{
+    for (int i = 1; i < BARS; i++)
+    {
+        int key = list[i];
+        int j = i - 1;
+        while (j >= 0 && key < list[j])
+        {
+            list[j + 1] = list[j];
+            j--;
+        }
+        list[j + 1] = key;
+    }
+}
+
+void selection_sort(int *list)
+{
+    for (int i = 0; i < BARS; i++)
+    {
+        int min_idx = i;
+        for (int j = i + 1; j < BARS; j++)
+        {
+            if (list[j] < list[min_idx])
+                min_idx = j;
+        }
+        int tmp = list[i];
+        list[i] = list[min_idx];
+        list[min_idx] = tmp;
+    }
+}
+
 BubbleState init_bubble_state(int *list)
 {
     BubbleState s;
@@ -132,6 +188,17 @@ InsertionState init_insertion_state(int *list)
     s.i = 1;
     s.j = s.i - 1;
     s.key = list[s.i];
+    s.done = 0;
+    return s;
+}
+
+SelectionState init_selection_state(int *list)
+{
+    SelectionState s;
+    s.list = list;
+    s.i = 0;
+    s.j = s.i;
+    s.min_idx = s.i;
     s.done = 0;
     return s;
 }
@@ -177,7 +244,7 @@ void step_insertion_state(InsertionState *s)
     else
     {
         s->list[s->j + 1] = s->key;
-        if (s->i < BARS)
+        if (s->i < BARS - 1)
         {
             s->i++;
             s->key = s->list[s->i];
@@ -190,33 +257,27 @@ void step_insertion_state(InsertionState *s)
     }
 }
 
-void apparently_not_insertion_sort(int *list)
+void step_selection_state(SelectionState *s)
 {
-    for (int i = 1; i < BARS; i++)
+    if (s->j < BARS)
     {
-        int j = i;
-        while (j > 0 && list[j] < list[j - 1])
-        {
-            int tmp = list[j];
-            list[j] = list[j - 1];
-            list[j - 1] = tmp;
-            j--;
-        }
+        if (s->list[s->j] < s->list[s->min_idx])
+            s->min_idx = s->j;
+        s->j++;
     }
-}
-
-void insertion_sort(int *list)
-{
-    for (int i = 1; i < BARS; i++)
+    else if (s->i < BARS - 1)
     {
-        int key = list[i];
-        int j = i - 1;
-        while (j >= 0 && key < list[j])
-        {
-            list[j + 1] = list[j];
-            j--;
-        }
-        list[j + 1] = key;
+        int tmp = s->list[s->i];
+        s->list[s->i] = s->list[s->min_idx];
+        s->list[s->min_idx] = tmp;
+
+        s->i++;
+        s->min_idx = s->i;
+        s->j = s->i + 1;
+    }
+    else
+    {
+        s->done = 1;
     }
 }
 
@@ -226,7 +287,7 @@ int main()
 
     int *list = create_random_list(100);
 
-    SortType sort_type = INSERTION;
+    SortType sort_type = SELECTION;
 
     SDL_Window *p_window = SDL_CreateWindow("Sort Visualiser", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
     SDL_Surface *p_surface = SDL_GetWindowSurface(p_window);
@@ -237,6 +298,7 @@ int main()
 
     BubbleState b_s = init_bubble_state(list);
     InsertionState i_s = init_insertion_state(list);
+    SelectionState s_s = init_selection_state(list);
 
     Uint32 black = SDL_MapRGB(p_surface->format, 0, 0, 0);
     State state = RUNNING;
@@ -255,6 +317,22 @@ int main()
                     list = create_random_list(100);
                     b_s = init_bubble_state(list);
                     i_s = init_insertion_state(list);
+                    s_s = init_selection_state(list);
+                }
+                if (event.key.keysym.sym == SDLK_b)
+                {
+                    b_s = init_bubble_state(list);
+                    sort_type = BUBBLE;
+                }
+                if (event.key.keysym.sym == SDLK_i)
+                {
+                    i_s = init_insertion_state(list);
+                    sort_type = INSERTION;
+                }
+                if (event.key.keysym.sym == SDLK_s)
+                {
+                    s_s = init_selection_state(list);
+                    sort_type = SELECTION;
                 }
             }
         }
@@ -269,6 +347,10 @@ int main()
         case (INSERTION):
             if (!i_s.done)
                 step_insertion_state(&i_s);
+            break;
+        case (SELECTION):
+            if (!s_s.done)
+                step_selection_state(&s_s);
             break;
         }
 
