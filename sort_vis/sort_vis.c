@@ -166,6 +166,14 @@ int main()
             {
                 state = QUIT;
             }
+            if (event.type == SDL_KEYDOWN)
+            {
+                if (event.key.keysym.sym == SDLK_r)
+                {
+                    list = create_random_list(100);
+                    s = init_bubble_state(list);
+                }
+            }
         }
         SDL_FillRect(p_surface, NULL, black);
 
