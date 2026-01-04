@@ -7,6 +7,7 @@
 #include "sorts/insertion_sort.h"
 #include "sorts/selection_sort.h"
 #include "sorts/shell_sort.h"
+#include "sorts/heap_sort.h"
 
 #define WIDTH 900
 #define HEIGHT 600
@@ -27,7 +28,8 @@ typedef enum
     BUBBLE,
     INSERTION,
     SELECTION,
-    SHELL
+    SHELL,
+    HEAP
 } SortType;
 
 int rand_in_range(int min, int max)
@@ -86,11 +88,12 @@ void render_list(SDL_Surface *p_surface, int *list, Uint32 *colours)
 int main()
 {
     srand(time(NULL));
-    printf("r: reset\nb: bubble sort\ni: insertion sort\ns: selection sort\nh: shell sort\n");
+    printf("r: reset\nb: bubble sort\ni: insertion sort\ns: selection sort\nl: shell sort\nh: heap sort\n");
 
     int *list = create_random_list(100);
+    heap_sort(list, BARS);
 
-    SortType sort_type = SHELL;
+    SortType sort_type = HEAP;
 
     SDL_Window *p_window = SDL_CreateWindow("Sort Visualiser", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
     SDL_Surface *p_surface = SDL_GetWindowSurface(p_window);
@@ -141,10 +144,14 @@ int main()
                     se_s = init_selection_state(list);
                     sort_type = SELECTION;
                 }
-                if (event.key.keysym.sym == SDLK_h)
+                if (event.key.keysym.sym == SDLK_l)
                 {
                     sh_s = init_shell_state(list, list_length);
                     sort_type = SHELL;
+                }
+                if (event.key.keysym.sym == SDLK_h)
+                {
+
                 }
             }
         }
@@ -167,6 +174,8 @@ int main()
         case (SHELL):
             if (!sh_s.done)
                 step_shell_state(&sh_s, list_length);
+            break;
+        case (HEAP):
             break;
         }
 
