@@ -91,7 +91,7 @@ int main()
     printf("r: reset\nb: bubble sort\ni: insertion sort\ns: selection sort\nl: shell sort\nh: heap sort\n");
 
     int *list = create_random_list(100);
-    heap_sort(list, BARS);
+    // heap_sort(list, BARS);
 
     SortType sort_type = HEAP;
 
@@ -108,6 +108,7 @@ int main()
     InsertionState i_s = init_insertion_state(list);
     SelectionState se_s = init_selection_state(list);
     ShellState sh_s = init_shell_state(list, list_length);
+    HeapState h_s = init_heap_state(list, list_length);
 
     Uint32 black = SDL_MapRGB(p_surface->format, 0, 0, 0);
     State state = RUNNING;
@@ -128,6 +129,7 @@ int main()
                     i_s = init_insertion_state(list);
                     se_s = init_selection_state(list);
                     sh_s = init_shell_state(list, list_length);
+                    h_s = init_heap_state(list, list_length);
                 }
                 if (event.key.keysym.sym == SDLK_b)
                 {
@@ -151,7 +153,8 @@ int main()
                 }
                 if (event.key.keysym.sym == SDLK_h)
                 {
-
+                    h_s = init_heap_state(list, list_length);
+                    sort_type = HEAP;
                 }
             }
         }
@@ -176,6 +179,8 @@ int main()
                 step_shell_state(&sh_s, list_length);
             break;
         case (HEAP):
+            if (!h_s.done)
+                step_heap_state(&h_s, list_length);
             break;
         }
 

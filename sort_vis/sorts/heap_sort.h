@@ -4,9 +4,15 @@
 typedef struct
 {
     int *list;
-    int i;
-    int j;
-    int key;
+    int init;
+    int build_i;
+    int heap_i;
+    int is_sifting;
+    int sort_i;
+    int is_heaping;
+    int l_idx;
+    int r_idx;
+    int biggest_idx;
     int done;
 } HeapState;
 
@@ -16,8 +22,8 @@ void build_max_heap(int *list, int list_length);
 
 void heap_sort(int *list, int list_length);
 
-// HeapState init_heap_state(int *list);
+HeapState init_heap_state(int *list, int list_length);
 
-// void step_heap_state(HeapState *s, int list_length);
+void step_heap_state(HeapState *s, int list_length);
 
 #endif
