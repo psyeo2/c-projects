@@ -4,16 +4,14 @@
 typedef struct
 {
     int *list;
-    int init;
-    int build_i;
-    int merge_i;
-    int is_sifting;
+    int *tmp;
     int sort_i;
-    int is_mergeing;
-    int l_idx;
-    int r_idx;
-    int biggest_idx;
-    int done;
+    int sort_j;
+    int mid;
+    int right;
+    int merge_i;
+    int merge_j;
+    int merge_k;
 } MergeState;
 
 void merge_sort(int *list, int list_length);
