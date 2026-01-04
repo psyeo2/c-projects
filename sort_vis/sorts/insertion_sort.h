@@ -10,6 +10,10 @@ typedef struct
     int done;
 } InsertionState;
 
+void insertion_sort(int *list, int list_length);
+
+void apparently_not_insertion_sort(int *list, int list_length);
+
 InsertionState init_insertion_state(int *list);
 
 void step_insertion_state(InsertionState *s, int list_length);

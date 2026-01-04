@@ -1,20 +1,5 @@
 #include "insertion_sort.h"
 
-void insertion_sort(int *list, int list_length)
-{
-    for (int i = 1; i < list_length; i++)
-    {
-        int key = list[i];
-        int j = i - 1;
-        while (j >= 0 && key < list[j])
-        {
-            list[j + 1] = list[j];
-            j--;
-        }
-        list[j + 1] = key;
-    }
-}
-
 void apparently_not_insertion_sort(int *list, int list_length)
 {
     for (int i = 1; i < list_length; i++)
@@ -27,6 +12,21 @@ void apparently_not_insertion_sort(int *list, int list_length)
             list[j - 1] = tmp;
             j--;
         }
+    }
+}
+
+void insertion_sort(int *list, int list_length)
+{
+    for (int i = 1; i < list_length; i++)
+    {
+        int key = list[i];
+        int j = i - 1;
+        while (j >= 0 && key < list[j])
+        {
+            list[j + 1] = list[j];
+            j--;
+        }
+        list[j + 1] = key;
     }
 }
 

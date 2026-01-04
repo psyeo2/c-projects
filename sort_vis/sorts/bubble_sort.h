@@ -10,6 +10,8 @@ typedef struct
     int done;
 } BubbleState;
 
+void bubble_sort(int *list, int list_length);
+
 BubbleState init_bubble_state(int *list, int list_length);
 
 void step_bubble_state(BubbleState *s);
