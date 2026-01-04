@@ -8,6 +8,7 @@
 #include "sorts/selection_sort.h"
 #include "sorts/shell_sort.h"
 #include "sorts/heap_sort.h"
+#include "sorts/merge_sort.h"
 
 #define WIDTH 900
 #define HEIGHT 600
@@ -29,7 +30,8 @@ typedef enum
     INSERTION,
     SELECTION,
     SHELL,
-    HEAP
+    HEAP,
+    MERGE
 } SortType;
 
 int rand_in_range(int min, int max)
@@ -91,9 +93,9 @@ int main()
     printf("r: reset\nb: bubble sort\ni: insertion sort\ns: selection sort\nl: shell sort\nh: heap sort\n");
 
     int *list = create_random_list(100);
-    // heap_sort(list, BARS);
+    merge_sort(list, BARS);
 
-    SortType sort_type = HEAP;
+    SortType sort_type = MERGE;
 
     SDL_Window *p_window = SDL_CreateWindow("Sort Visualiser", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
     SDL_Surface *p_surface = SDL_GetWindowSurface(p_window);
@@ -109,6 +111,7 @@ int main()
     SelectionState se_s = init_selection_state(list);
     ShellState sh_s = init_shell_state(list, list_length);
     HeapState h_s = init_heap_state(list, list_length);
+    // MergeState m_s = init_merge_state(list, list_length);
 
     Uint32 black = SDL_MapRGB(p_surface->format, 0, 0, 0);
     State state = RUNNING;
@@ -156,6 +159,11 @@ int main()
                     h_s = init_heap_state(list, list_length);
                     sort_type = HEAP;
                 }
+                if (event.key.keysym.sym == SDLK_m)
+                {
+                    // m_s = init_merge_state(list, list_length);
+                    // sort_type = MERGE;
+                }
             }
         }
         SDL_FillRect(p_surface, NULL, black);
@@ -181,6 +189,10 @@ int main()
         case (HEAP):
             if (!h_s.done)
                 step_heap_state(&h_s, list_length);
+            break;
+        case (MERGE):
+            // if(!m_s.done)
+                // step_merge_state(&m_s, list_length);
             break;
         }
 

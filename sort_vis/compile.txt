@@ -1,1 +1,1 @@
-gcc -Wall -Wextra -o sort_vis sort_vis.c sorts/bubble_sort.c sorts/insertion_sort.c sorts/selection_sort.c sorts/shell_sort.c sorts/heap_sort.c `sdl2-config --cflags --libs`
+gcc -Wall -Wextra -o sort_vis sort_vis.c sorts/bubble_sort.c sorts/insertion_sort.c sorts/selection_sort.c sorts/shell_sort.c sorts/heap_sort.c sorts/merge_sort.c `sdl2-config --cflags --libs`

@@ -95,9 +95,9 @@ HeapState init_heap_state(int *list, int list_length)
     return s;
 }
 
-void step_heapify(HeapState *s, int list_length)
-{
-}
+// void step_heapify(HeapState *s, int list_length)
+// {
+// }
 
 // to do: rip out duplicate heapify logic into above function
 // can prob get rid of some of the state flags as well in that case
