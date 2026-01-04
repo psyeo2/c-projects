@@ -90,12 +90,12 @@ void render_list(SDL_Surface *p_surface, int *list, Uint32 *colours)
 int main()
 {
     srand(time(NULL));
-    printf("r: reset\nb: bubble sort\ni: insertion sort\ns: selection sort\nl: shell sort\nh: heap sort\n");
+    printf("r: reset\nb: bubble sort\ni: insertion sort\ns: selection sort\nl: shell sort\nh: heap sort\nm: merge sort\n");
 
     int *list = create_random_list(100);
-    merge_sort(list, BARS);
+    // merge_sort(list, BARS);
 
-    SortType sort_type = MERGE;
+    SortType sort_type = BUBBLE;
 
     SDL_Window *p_window = SDL_CreateWindow("Sort Visualiser", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
     SDL_Surface *p_surface = SDL_GetWindowSurface(p_window);
@@ -111,7 +111,7 @@ int main()
     SelectionState se_s = init_selection_state(list);
     ShellState sh_s = init_shell_state(list, list_length);
     HeapState h_s = init_heap_state(list, list_length);
-    // MergeState m_s = init_merge_state(list, list_length);
+    MergeState m_s = init_merge_state(list, list_length);
 
     Uint32 black = SDL_MapRGB(p_surface->format, 0, 0, 0);
     State state = RUNNING;
@@ -125,44 +125,43 @@ int main()
             }
             if (event.type == SDL_KEYDOWN)
             {
-                if (event.key.keysym.sym == SDLK_r)
+                switch (event.key.keysym.sym)
                 {
+                case SDLK_r:
                     list = create_random_list(100);
                     b_s = init_bubble_state(list, list_length);
                     i_s = init_insertion_state(list);
                     se_s = init_selection_state(list);
                     sh_s = init_shell_state(list, list_length);
                     h_s = init_heap_state(list, list_length);
-                }
-                if (event.key.keysym.sym == SDLK_b)
-                {
+                    m_s = init_merge_state(list, list_length);
+                    break;
+                case SDLK_b:
                     b_s = init_bubble_state(list, list_length);
                     sort_type = BUBBLE;
-                }
-                if (event.key.keysym.sym == SDLK_i)
-                {
+                    break;
+                case SDLK_i:
                     i_s = init_insertion_state(list);
                     sort_type = INSERTION;
-                }
-                if (event.key.keysym.sym == SDLK_s)
-                {
+                    break;
+                case SDLK_s:
                     se_s = init_selection_state(list);
                     sort_type = SELECTION;
-                }
-                if (event.key.keysym.sym == SDLK_l)
-                {
+                    break;
+                case SDLK_l:
                     sh_s = init_shell_state(list, list_length);
                     sort_type = SHELL;
-                }
-                if (event.key.keysym.sym == SDLK_h)
-                {
+                    break;
+                case SDLK_h:
                     h_s = init_heap_state(list, list_length);
                     sort_type = HEAP;
-                }
-                if (event.key.keysym.sym == SDLK_m)
-                {
-                    // m_s = init_merge_state(list, list_length);
-                    // sort_type = MERGE;
+                    break;
+                case SDLK_m:
+                    m_s = init_merge_state(list, list_length);
+                    sort_type = MERGE;
+                    break;
+                default:
+                    break;
                 }
             }
         }
@@ -191,8 +190,8 @@ int main()
                 step_heap_state(&h_s, list_length);
             break;
         case (MERGE):
-            // if(!m_s.done)
-                // step_merge_state(&m_s, list_length);
+            if (!m_s.done)
+                step_merge_state(&m_s, list_length);
             break;
         }
 

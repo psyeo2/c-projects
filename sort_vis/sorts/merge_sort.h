@@ -9,9 +9,12 @@ typedef struct
     int sort_j;
     int mid;
     int right;
+    int merging;
     int merge_i;
     int merge_j;
     int merge_k;
+    int merge_l;
+    int done;
 } MergeState;
 
 void merge_sort(int *list, int list_length);
