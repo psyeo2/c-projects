@@ -250,14 +250,13 @@ int main(int argc, char *argv[])
         render = 0;
         if ((ch = fgetc(file)) != EOF)
         {
+            if (i == 0 && (ch == ' ' || ch == '\n' || ch == '\r'))
+                continue;
             if (ch == ' ' || ch == '\n' || ch == '\r')
             {
-                if (i > 0)
-                {
                     if (i < (int)sizeof(word) - 1)
                         word[i++] = '\0';
                     render = 1;
-                }
             }
             else if (i < (int)sizeof(word) - 1)
                 word[i++] = ch;
