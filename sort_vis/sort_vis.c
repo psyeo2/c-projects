@@ -114,6 +114,8 @@ int main()
     MergeState m_s = init_merge_state(list, list_length);
 
     Uint32 black = SDL_MapRGB(p_surface->format, 0, 0, 0);
+    Uint32 green = SDL_MapRGB(p_surface->format, 0, 255, 0);
+
     State state = RUNNING;
     while (state != QUIT)
     {
@@ -172,26 +174,38 @@ int main()
         case (BUBBLE):
             if (!b_s.done)
                 step_bubble_state(&b_s);
+            else
+                SDL_FillRect(p_surface, NULL, green);
             break;
         case (INSERTION):
             if (!i_s.done)
                 step_insertion_state(&i_s, list_length);
+            else
+                SDL_FillRect(p_surface, NULL, green);
             break;
         case (SELECTION):
             if (!se_s.done)
                 step_selection_state(&se_s, list_length);
+            else
+                SDL_FillRect(p_surface, NULL, green);
             break;
         case (SHELL):
             if (!sh_s.done)
                 step_shell_state(&sh_s, list_length);
+            else
+                SDL_FillRect(p_surface, NULL, green);
             break;
         case (HEAP):
             if (!h_s.done)
                 step_heap_state(&h_s, list_length);
+            else
+                SDL_FillRect(p_surface, NULL, green);
             break;
         case (MERGE):
             if (!m_s.done)
                 step_merge_state(&m_s, list_length);
+            else
+                SDL_FillRect(p_surface, NULL, green);
             break;
         }
 
