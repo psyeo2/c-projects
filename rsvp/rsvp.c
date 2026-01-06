@@ -13,14 +13,13 @@ typedef enum
     QUIT
 } State;
 
-// int get_word_length(char *word)
-// {
-//     int word_len = 0;
-//     while (word[word_len] != '\0')
-//         word_len++;
-
-//     return word_len;
-// }
+int get_word_length(char *word)
+{
+    int word_len = 0;
+    while (word[word_len] != '\0')
+        word_len++;
+    return word_len;
+}
 
 int is_letter(char ch)
 {
@@ -32,14 +31,13 @@ int is_letter(char ch)
 
 int get_ovp_idx(char *word)
 {
-    int word_len = 0;
+    // printf("no seg\n");
+    // return 0;
+    int word_len = get_word_length(word);
     int front_punc = 0;
 
-    while (word[word_len] != '\0')
-        word_len++;
-
     while (word_len > 0 && !is_letter(word[word_len - 1]))
-        word_len -= 1;
+        word_len--;
 
     for (int i = 0; i < word_len; i++)
     {
@@ -49,24 +47,85 @@ int get_ovp_idx(char *word)
             break;
     }
 
-    if (word_len < 5)
-        return word_len ? word_len / 2 + front_punc : 1 + front_punc;
+    word_len -= front_punc;
+
+    if (word_len < 4)
+        return word_len ? word_len / 2 + front_punc : front_punc;
     else if (word_len < 9)
         return word_len / 2 - 1 + front_punc;
     else
         return ((word_len * 2) / 7) ? (word_len * 2) / 7 + front_punc : 1 + front_punc;
 }
 
-int print_word(SDL_Surface *p_surface, SDL_Surface *text_surface, int wpm, char *word, int i, int advance, double char_centre)
+void split_word(TTF_Font *font, SDL_Surface **left_surface, SDL_Surface **ovp_surface, SDL_Surface **right_surface, char *word, int ovp_idx)
+{
+    int word_len = get_word_length(word);
+    char *left_chars = malloc(ovp_idx * sizeof(char) + 1);
+    char *ovp_char = malloc(sizeof(char) + 1);
+    char *right_chars = malloc(word_len - 1 - ovp_idx + 1);
+
+    SDL_Color white = {255, 255, 255, 255};
+    SDL_Color red = {255, 0, 0, 255};
+
+    for (int i = 0; i < ovp_idx; i++)
+        left_chars[i] = word[i];
+    left_chars[ovp_idx] = '\0';
+    ovp_char[0] = word[ovp_idx];
+    ovp_char[1] = '\0';
+    for (int i = ovp_idx + 1; i < word_len; i++)
+        right_chars[i - (ovp_idx + 1)] = word[i];
+    right_chars[word_len - ovp_idx - 1] = '\0';
+
+    if (left_chars[0] != '\0')
+        *left_surface = TTF_RenderText_Blended(font, left_chars, white);
+    *ovp_surface = TTF_RenderText_Blended(font, ovp_char, red);
+    if (right_chars[0] != '\0')
+        *right_surface = TTF_RenderText_Blended(font, right_chars, white);
+
+    free(left_chars);
+    free(ovp_char);
+    free(right_chars);
+}
+
+int print_word(SDL_Surface *p_surface, TTF_Font *font, int wpm, char *word, int i, int advance, double char_centre)
 {
     int base = (60 * 1000) / wpm;
     int ovp_idx = get_ovp_idx(word);
 
-    SDL_Rect dst = {(int)(WIDTH / 2 - (ovp_idx * advance + char_centre)), HEIGHT / 2 - text_surface->h, text_surface->w, text_surface->h};
+    SDL_Surface *left_surface = NULL;
+    SDL_Surface *ovp_surface = NULL;
+    SDL_Surface *right_surface = NULL;
+    SDL_Rect dst_left, dst_ovp, dst_right;
 
-    SDL_BlitSurface(text_surface, NULL, p_surface, &dst);
+    split_word(font, &left_surface, &ovp_surface, &right_surface, word, ovp_idx);
 
-    switch (word[i - 2])
+    // printf("Word: '%s', word length: %d, ovp_idx: %d\n", word, get_word_length(word), ovp_idx);
+
+    int left_w = left_surface ? left_surface->w : 0;
+    int ovp_w = ovp_surface ? ovp_surface->w : 0;
+    if (left_surface)
+    {
+        dst_left = (SDL_Rect){(int)(WIDTH / 2 - (ovp_idx * advance + char_centre)), HEIGHT / 2 - left_surface->h, left_surface->w, left_surface->h};
+        SDL_BlitSurface(left_surface, NULL, p_surface, &dst_left);
+        SDL_FreeSurface(left_surface);
+    }
+    if (ovp_surface)
+    {
+        dst_ovp = (SDL_Rect){(int)(WIDTH / 2 - (ovp_idx * advance + char_centre)) + left_w, HEIGHT / 2 - ovp_surface->h, ovp_surface->w, ovp_surface->h};
+        SDL_BlitSurface(ovp_surface, NULL, p_surface, &dst_ovp);
+        SDL_FreeSurface(ovp_surface);
+    }
+    if (right_surface)
+    {
+        dst_right = (SDL_Rect){(int)(WIDTH / 2 - (ovp_idx * advance + char_centre)) + left_w + ovp_w, HEIGHT / 2 - right_surface->h, ovp_w, right_surface->h};
+        SDL_BlitSurface(right_surface, NULL, p_surface, &dst_right);
+        SDL_FreeSurface(right_surface);
+    }
+
+    char last_char = 0;
+    if (i > 2)
+        last_char = word[i - 2];
+    switch (last_char)
     {
     case (','):
     case (';'):
@@ -100,7 +159,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "TTF Error\n");
         return 1;
     }
-    TTF_Font *font = TTF_OpenFont("font.ttf", 22);
+    TTF_Font *font = TTF_OpenFont("font.ttf", 32);
     if (!font)
     {
         fprintf(stderr, "Load font error: %s\n", TTF_GetError());
@@ -130,8 +189,6 @@ int main(int argc, char *argv[])
 
     SDL_Window *p_window = SDL_CreateWindow("Rapid Serial Visual Presentation", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, 0);
     SDL_Surface *p_surface = SDL_GetWindowSurface(p_window);
-    SDL_Color white = {255, 255, 255, 255};
-    SDL_Surface *text_surface;
     SDL_Rect y_axis = (SDL_Rect){WIDTH / 2, 0, 2, HEIGHT};
 
     int render;
@@ -195,10 +252,12 @@ int main(int argc, char *argv[])
         {
             if (ch == ' ' || ch == '\n' || ch == '\r')
             {
-                if (i < (int)sizeof(word) - 1)
-                    word[i++] = '\0';
-
-                render = 1;
+                if (i > 0)
+                {
+                    if (i < (int)sizeof(word) - 1)
+                        word[i++] = '\0';
+                    render = 1;
+                }
             }
             else if (i < (int)sizeof(word) - 1)
                 word[i++] = ch;
@@ -213,9 +272,8 @@ int main(int argc, char *argv[])
 
         if (render)
         {
-            text_surface = TTF_RenderText_Blended(font, word, white);
-            delay = print_word(p_surface, text_surface, wpm, word, i, advance, char_centre);
-            SDL_FreeSurface(text_surface);
+            // text_surface = TTF_RenderText_Blended(font, word, white);
+            delay = print_word(p_surface, font, wpm, word, i, advance, char_centre);
 
             i = 0;
 
