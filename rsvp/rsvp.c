@@ -22,18 +22,39 @@ typedef enum
 //     return word_len;
 // }
 
+int is_letter(char ch)
+{
+    if ((ch > 64 && ch < 91) || (ch > 96 && ch < 123))
+        return 1;
+    else
+        return 0;
+}
+
 int get_ovp_idx(char *word)
 {
     int word_len = 0;
+    int front_punc = 0;
+
     while (word[word_len] != '\0')
         word_len++;
 
+    while (word_len > 0 && !is_letter(word[word_len - 1]))
+        word_len -= 1;
+
+    for (int i = 0; i < word_len; i++)
+    {
+        if (!is_letter(word[i]))
+            front_punc++;
+        else
+            break;
+    }
+
     if (word_len < 5)
-        return word_len ? word_len / 2 : 1;
+        return word_len ? word_len / 2 + front_punc : 1 + front_punc;
     else if (word_len < 9)
-        return word_len / 2 - 1;
+        return word_len / 2 - 1 + front_punc;
     else
-        return (word_len / 3) ? word_len / 3 : 1;
+        return ((word_len * 2) / 7) ? (word_len * 2) / 7 + front_punc : 1 + front_punc;
 }
 
 int print_word(SDL_Surface *p_surface, SDL_Surface *text_surface, int wpm, char *word, int i, int advance, double char_centre)
@@ -113,6 +134,8 @@ int main(int argc, char *argv[])
     SDL_Surface *text_surface;
     SDL_Rect y_axis = (SDL_Rect){WIDTH / 2, 0, 2, HEIGHT};
 
+    int render;
+
     SDL_Event event;
 
     Uint32 black = SDL_MapRGB(p_surface->format, 0, 0, 0);
@@ -131,13 +154,7 @@ int main(int argc, char *argv[])
                 switch (event.key.keysym.sym)
                 {
                 case SDLK_r:
-                    fclose(file);
-                    file = fopen(filename, "r");
-                    if (!file)
-                    {
-                        fprintf(stderr, "File load error. Is %s the correct filename?\n", filename);
-                        return 1;
-                    }
+                    rewind(file);
                     break;
                 case SDLK_1:
                     wpm = 100;
@@ -173,6 +190,7 @@ int main(int argc, char *argv[])
         SDL_FillRect(p_surface, NULL, black);
         SDL_FillRect(p_surface, &y_axis, grey);
 
+        render = 0;
         if ((ch = fgetc(file)) != EOF)
         {
             if (ch == ' ' || ch == '\n' || ch == '\r')
@@ -180,13 +198,7 @@ int main(int argc, char *argv[])
                 if (i < (int)sizeof(word) - 1)
                     word[i++] = '\0';
 
-                text_surface = TTF_RenderText_Blended(font, word, white);
-                delay = print_word(p_surface, text_surface, wpm, word, i, advance, char_centre);
-                i = 0;
-                SDL_FreeSurface(text_surface);
-
-                SDL_UpdateWindowSurface(p_window);
-                SDL_Delay(delay);
+                render = 1;
             }
             else if (i < (int)sizeof(word) - 1)
                 word[i++] = ch;
@@ -196,9 +208,16 @@ int main(int argc, char *argv[])
             if (i < (int)sizeof(word) - 1)
                 word[i++] = '\0';
 
+            render = 1;
+        }
+
+        if (render)
+        {
             text_surface = TTF_RenderText_Blended(font, word, white);
             delay = print_word(p_surface, text_surface, wpm, word, i, advance, char_centre);
             SDL_FreeSurface(text_surface);
+
+            i = 0;
 
             SDL_UpdateWindowSurface(p_window);
             SDL_Delay(delay);
@@ -206,5 +225,6 @@ int main(int argc, char *argv[])
     }
 
     fclose(file);
+    TTF_Quit();
     return 0;
 }
