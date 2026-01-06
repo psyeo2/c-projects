@@ -79,7 +79,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "TTF Error\n");
         return 1;
     }
-    TTF_Font *font = TTF_OpenFont("font.ttf", 16);
+    TTF_Font *font = TTF_OpenFont("font.ttf", 22);
     if (!font)
     {
         fprintf(stderr, "Load font error: %s\n", TTF_GetError());
@@ -130,6 +130,15 @@ int main(int argc, char *argv[])
             {
                 switch (event.key.keysym.sym)
                 {
+                case SDLK_r:
+                    fclose(file);
+                    file = fopen(filename, "r");
+                    if (!file)
+                    {
+                        fprintf(stderr, "File load error. Is %s the correct filename?\n", filename);
+                        return 1;
+                    }
+                    break;
                 case SDLK_1:
                     wpm = 100;
                     break;
