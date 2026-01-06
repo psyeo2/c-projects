@@ -1,0 +1,1 @@
+gcc -Wall -Wextra -o rsvp rsvp.c `sdl2-config --cflags --libs` -lSDL2_ttf

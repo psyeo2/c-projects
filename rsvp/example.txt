@@ -1,0 +1,8 @@
+Rapid Serial Visual Presentation (RSVP) is a speed reading technique where
+words are displayed one at a time at a fixed point on the screen, usually
+aligned around an optimal recognition point within each word. By keeping the
+text stationary, RSVP reduces eye movement and allows readers to process words
+more quickly than with traditional left to right scanning. While this method
+can significantly increase reading speed for simple narrative text, it may
+reduce comprehension for complex material that benefits from rereading,
+context, and natural pacing.
