@@ -4,9 +4,9 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 
-#define WIDTH 900
-#define HEIGHT 600
-#define CELL_SIZE 10
+#define WIDTH 1600
+#define HEIGHT 1000
+#define CELL_SIZE 1
 
 typedef enum
 {
@@ -151,10 +151,10 @@ int main(int argc, char *argv[])
     int cols = WIDTH / CELL_SIZE + 2;
     int rows = HEIGHT / CELL_SIZE + 2;
 
-    int prev_grid[rows * cols];
-    int next_grid[rows * cols];
-    memset(prev_grid, 0, sizeof(prev_grid));
-    memset(next_grid, 0, sizeof(next_grid));
+    size_t grid_size = cols * rows;
+
+    int* prev_grid = calloc(grid_size, sizeof(*prev_grid));
+    int* next_grid = calloc(grid_size, sizeof(*next_grid));
 
     int *prev = &prev_grid[0];
     int *next = &next_grid[0];
@@ -201,8 +201,8 @@ int main(int argc, char *argv[])
                     }
                 } else if ((state == RUNNING || state == PAUSED) && event.key.keysym.sym == SDLK_r)
                 {
-                    memset(prev_grid, 0, sizeof(prev_grid));
-                    memset(next_grid, 0, sizeof(next_grid));
+                    memset(prev_grid, 0, sizeof(*prev_grid));
+                    memset(next_grid, 0, sizeof(*next_grid));
 
                     prev = &prev_grid[0];
                     next = &next_grid[0];
@@ -253,6 +253,9 @@ int main(int argc, char *argv[])
         SDL_Delay(state == INIT ? 16 : frame_delay);
         SDL_FreeSurface(text_surface);
     }
+
+    free(prev_grid);
+    free(next_grid);
 
     return 0;
 }
