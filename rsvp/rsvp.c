@@ -213,6 +213,12 @@ int main(int argc, char *argv[])
                 case SDLK_r:
                     rewind(file);
                     break;
+                case SDLK_SPACE:
+                    if (state == RUNNING)
+                        state = PAUSED;
+                    else if (state == PAUSED)
+                        state = RUNNING;
+                    break;
                 case SDLK_1:
                     wpm = 100;
                     break;
@@ -244,40 +250,47 @@ int main(int argc, char *argv[])
             }
         }
 
-        SDL_FillRect(p_surface, NULL, black);
-        SDL_FillRect(p_surface, &y_axis, grey);
-
-        render = 0;
-        if ((ch = fgetc(file)) != EOF)
+        if (state == RUNNING)
         {
-            if (i == 0 && (ch == ' ' || ch == '\n' || ch == '\r'))
-                continue;
-            if (ch == ' ' || ch == '\n' || ch == '\r')
+            SDL_FillRect(p_surface, NULL, black);
+            SDL_FillRect(p_surface, &y_axis, grey);
+
+            render = 0;
+            if ((ch = fgetc(file)) != EOF)
             {
+                if (ch == 146)
+                    ch = '\'';
+                // if (ch == 150)
+                //     ch = '-';
+                if (i == 0 && (ch == ' ' || ch == '\n' || ch == '\r'))
+                    continue;
+                if (ch == ' ' || ch == '\n' || ch == '\r')
+                {
                     if (i < (int)sizeof(word) - 1)
                         word[i++] = '\0';
                     render = 1;
+                }
+                else if (i < (int)sizeof(word) - 1)
+                    word[i++] = ch;
             }
-            else if (i < (int)sizeof(word) - 1)
-                word[i++] = ch;
-        }
-        else if (i > 0)
-        {
-            if (i < (int)sizeof(word) - 1)
-                word[i++] = '\0';
+            else if (i > 0)
+            {
+                if (i < (int)sizeof(word) - 1)
+                    word[i++] = '\0';
 
-            render = 1;
-        }
+                render = 1;
+            }
 
-        if (render)
-        {
-            // text_surface = TTF_RenderText_Blended(font, word, white);
-            delay = print_word(p_surface, font, wpm, word, i, advance, char_centre);
+            if (render)
+            {
+                // text_surface = TTF_RenderText_Blended(font, word, white);
+                delay = print_word(p_surface, font, wpm, word, i, advance, char_centre);
 
-            i = 0;
+                i = 0;
 
-            SDL_UpdateWindowSurface(p_window);
-            SDL_Delay(delay);
+                SDL_UpdateWindowSurface(p_window);
+                SDL_Delay(delay);
+            }
         }
     }
 
