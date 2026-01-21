@@ -6,7 +6,7 @@
 
 #define WIDTH 1600
 #define HEIGHT 1000
-#define CELL_SIZE 1
+#define CELL_SIZE 10
 
 typedef enum
 {
@@ -91,18 +91,19 @@ void update_grid(int rows, int cols, int *p_prev_grid, int *p_next_grid)
 
 void display_grid(SDL_Surface *p_surface, Uint32 colour, int rows, int cols, int *p_grid)
 {
+    SDL_Rect cell = {
+        .w = CELL_SIZE,
+        .h = CELL_SIZE
+    };
     for (int r = 1; r < rows - 1; r++)
     {
         for (int c = 1; c < cols - 1; c++)
         {
             if (p_grid[r * cols + c])
             {
-                SDL_Rect cell_rect = (SDL_Rect){
-                    (c - 1) * CELL_SIZE,
-                    (r - 1) * CELL_SIZE,
-                    CELL_SIZE,
-                    CELL_SIZE};
-                SDL_FillRect(p_surface, &cell_rect, colour);
+                cell.x = (c - 1) * CELL_SIZE;
+                cell.y = (r - 1) * CELL_SIZE;
+                SDL_FillRect(p_surface, &cell, colour);
             }
         }
     }
@@ -119,7 +120,7 @@ int main(int argc, char *argv[])
     }
     int frame_delay = (int)(1000 / fps);
 
-    if(TTF_Init() != 0)
+    if (TTF_Init() != 0)
     {
         printf("TTF Error\n");
         return 1;
@@ -153,8 +154,8 @@ int main(int argc, char *argv[])
 
     size_t grid_size = cols * rows;
 
-    int* prev_grid = calloc(grid_size, sizeof(*prev_grid));
-    int* next_grid = calloc(grid_size, sizeof(*next_grid));
+    int *prev_grid = calloc(grid_size, sizeof(*prev_grid));
+    int *next_grid = calloc(grid_size, sizeof(*next_grid));
 
     int *prev = &prev_grid[0];
     int *next = &next_grid[0];
@@ -199,7 +200,8 @@ int main(int argc, char *argv[])
                                 prev_grid[r * cols + c] = 1;
                         }
                     }
-                } else if ((state == RUNNING || state == PAUSED) && event.key.keysym.sym == SDLK_r)
+                }
+                else if ((state == RUNNING || state == PAUSED) && event.key.keysym.sym == SDLK_r)
                 {
                     memset(prev_grid, 0, sizeof(*prev_grid));
                     memset(next_grid, 0, sizeof(*next_grid));
