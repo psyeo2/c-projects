@@ -44,9 +44,10 @@ void *handle_client(void *arg)
 {
     ClientContext *client_context = (ClientContext *)arg;
     int client_fd = client_context->client_fd;
-    struct sockaddr_in client_addr = client_context->client_addr;
+    // struct sockaddr_in client_addr = client_context->client_addr;
 
     ParsedHttp parsed_http;
+    parsed_http_init(&parsed_http);
 
     ssize_t used = 0;
     ssize_t r = 0;
@@ -81,46 +82,52 @@ void *handle_client(void *arg)
         {
             break;
         }
-        r = 0;
     }
-    int body_length = parse_headers(out, &parsed_http.request_line, &parsed_http.headers);
-    if (body_length)
+    int content_length = parse_headers(out, &parsed_http.request_line, &parsed_http.headers);
+    if (content_length)
     {
         int body_idx = needle_loc - out + 4;
         int body_recieved = used - body_idx;
-        int remaining = body_length - body_recieved;
-        char *tmp_out = realloc(out, (used + remaining) * sizeof(char));
-        if (!tmp_out)
+        int remaining = content_length - body_recieved;
+        if (remaining > 0)
         {
-            fprintf(stderr, "realloc err\n");
-            free(out);
-            close(client_fd);
-            free(arg);
-            return NULL;
-        }
-        out = tmp_out;
-        r = 0;
-        while (r < remaining)
-        {
-            ssize_t want = remaining - r;
-            ssize_t chunk = want > BUFFER_LEN ? want : BUFFER_LEN;
-
-            ssize_t n = recv(client_fd, tmp, chunk, 0);
-            if (n <= 0)
+            char *tmp_out = realloc(out, (used + remaining) * sizeof(char));
+            if (!tmp_out)
             {
-                perror("recv failed");
+                fprintf(stderr, "realloc err\n");
                 free(out);
                 close(client_fd);
                 free(arg);
                 return NULL;
             }
-            memcpy(out + used + r, tmp, n * sizeof(char));
-            r += n;
+            out = tmp_out;
+            r = 0;
+            while (r < remaining)
+            {
+                ssize_t want = remaining - r;
+                ssize_t chunk = want > BUFFER_LEN ? BUFFER_LEN : want;
+
+                ssize_t n = recv(client_fd, tmp, chunk, 0);
+                if (n <= 0)
+                {
+                    perror("recv failed");
+                    free(out);
+                    close(client_fd);
+                    free(arg);
+                    return NULL;
+                }
+                memcpy(out + used + r, tmp, n * sizeof(char));
+                r += n;
+            }
+            used += remaining;
         }
-        used += remaining;
-        parse_body(out, body_idx, &parsed_http.body);
+        parse_body(out, body_idx, content_length, &parsed_http.body);
     }
 
+    parsed_http_print(parsed_http);
+
+    parsed_http_free(&parsed_http);
+    free(out);
     close(client_fd);
     free(arg);
     return NULL;

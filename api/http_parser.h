@@ -37,6 +37,16 @@ typedef struct
     char reason[256];
 } ResponseLine;
 
+void parsed_http_init(ParsedHttp *p);
+
+void parsed_http_print(ParsedHttp p);
+
+void parsed_http_free(ParsedHttp *p);
+
+int parse_headers(char *buffer, RequestLine *request_line, Headers *headers);
+
+void parse_body(char* buffer, int body_idx, int content_length, char **body);
+
 void parse_request(char *request, ParsedHttp *parsed_http, int buffer_len);
 
 #endif

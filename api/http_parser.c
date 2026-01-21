@@ -5,13 +5,6 @@
 #include <string.h>
 #include <ctype.h>
 
-// void init_parsed_http(ParsedHttp *p)
-// {
-//     p->request_line = NULL;
-//     p->headers = NULL;
-//     p->body = NULL;
-// }
-
 int get_line_from_string(char **p, char *line)
 {
     int i = 0;
@@ -127,7 +120,44 @@ void headers_free(Headers *h)
     free(h->headers);
 }
 
-void parse_body(Headers *h, long content_length_idx, char **p, char **body)
+void parsed_http_init(ParsedHttp *p)
+{
+    Headers h;
+    headers_init(&h);
+
+    p->headers = h;
+    p->body = NULL;
+}
+
+void parsed_http_print(ParsedHttp p)
+{
+    printf("Method: %s, Target: %s, Version: %s\n",
+           p.request_line.method,
+           p.request_line.target,
+           p.request_line.version);
+
+    for (size_t i = 0; i < p.headers.count; i++)
+    {
+        printf("Header %ld: {Name: %s, Value: %s}\n", i + 1, p.headers.headers[i].name, p.headers.headers[i].value);
+    }
+
+    if (p.body)
+    {
+        printf("Body: %s\n", p.body);
+    }
+    else
+    {
+        printf("No body\n");
+    }
+}
+
+void parsed_http_free(ParsedHttp *p)
+{
+    headers_free(&p->headers);
+    free(p->body);
+}
+
+void parse_body_(Headers *h, long content_length_idx, char **p, char **body)
 {
     char *end;
     int content_length = strtol(h->headers[content_length_idx].value, &end, 10);
@@ -146,7 +176,7 @@ void parse_request(char *request, ParsedHttp *parsed_http, int buffer_len)
     char line[buffer_len];
     char *p = request;
 
-    int content_length_idx;
+    int content_length_idx = -1;
 
     RequestLine request_line;
     Headers headers;
@@ -162,15 +192,49 @@ void parse_request(char *request, ParsedHttp *parsed_http, int buffer_len)
     {
         headers_append(&headers, line);
     }
-    for (int i = 0; i < headers.count; i++)
+    for (size_t i = 0; i < headers.count; i++)
     {
-        printf("Header %d: {Name: %s, Value: %s}\n", i + 1, headers.headers[i].name, headers.headers[i].value);
+        printf("Header %ld: {Name: %s, Value: %s}\n", i + 1, headers.headers[i].name, headers.headers[i].value);
     }
 
     if ((content_length_idx = headers_search(&headers, "content-length")) >= 0)
     {
-        parse_body(&headers, content_length_idx, &p, &(parsed_http->body));
+        parse_body_(&headers, content_length_idx, &p, &(parsed_http->body));
 
         printf("Body: %s\n", parsed_http->body);
     }
+}
+
+int parse_headers(char *buffer, RequestLine *request_line, Headers *headers)
+{
+    headers_init(headers);
+    char line[1024];
+    char *p = buffer;
+    int content_length_idx = -1;
+    char *end;
+
+    if (get_line_from_string(&p, line))
+    {
+        parse_request_line(line, request_line);
+    }
+    while (get_line_from_string(&p, line))
+    {
+        headers_append(headers, line);
+    }
+    if ((content_length_idx = headers_search(headers, "content-length")) >= 0)
+    {
+        return strtol(headers->headers[content_length_idx].value, &end, 10);
+    }
+    return 0;
+}
+
+void parse_body(char *buffer, int body_idx, int content_length, char **body)
+{
+    *body = malloc(content_length * sizeof(char) + 1);
+    int i;
+    for (i = body_idx; i < body_idx + content_length; i++)
+    {
+        (*body)[i - body_idx] = buffer[i];
+    }
+    (*body)[i] = '\0';
 }
