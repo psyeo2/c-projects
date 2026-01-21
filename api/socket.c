@@ -23,26 +23,103 @@ typedef struct
     struct sockaddr_in client_addr;
 } ClientContext;
 
+void *memmem_simple(const void *haystack, size_t hay_len,
+                    const void *needle, size_t nee_len)
+{
+    if (nee_len == 0 || hay_len < nee_len)
+        return NULL;
+
+    const unsigned char *h = haystack;
+    const unsigned char *n = needle;
+
+    for (size_t i = 0; i <= hay_len - nee_len; i++)
+    {
+        if (memcmp(h + i, n, nee_len) == 0)
+            return (void *)(h + i);
+    }
+    return NULL;
+}
+
 void *handle_client(void *arg)
 {
     ClientContext *client_context = (ClientContext *)arg;
     int client_fd = client_context->client_fd;
     struct sockaddr_in client_addr = client_context->client_addr;
-    char request[BUFFER_LEN];
+
     ParsedHttp parsed_http;
-    char response[BUFFER_LEN];
-    char ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &client_addr.sin_addr, ip, sizeof(ip));
 
-    printf("Thread openened for connection from %s\n", ip);
+    ssize_t used = 0;
+    ssize_t r = 0;
+    char tmp[BUFFER_LEN];
+    char *out = NULL;
+    char *needle_loc;
 
-    ssize_t n = recv(client_fd, request, BUFFER_LEN, 0);
-    if (n > 0)
+    while (1)
     {
-        request[n] = '\0';
+        r = recv(client_fd, tmp, BUFFER_LEN, 0);
+        if (r <= 0)
+        {
+            perror("recv failed");
+            free(out);
+            close(client_fd);
+            free(arg);
+            return NULL;
+        }
+        used += r;
+        char *tmp_out = realloc(out, used * sizeof(char));
+        if (!tmp_out)
+        {
+            fprintf(stderr, "realloc err\n");
+            free(out);
+            close(client_fd);
+            free(arg);
+            return NULL;
+        }
+        out = tmp_out;
+        memcpy(out + used - r, tmp, r * sizeof(char));
+        if ((needle_loc = (char *)memmem_simple(out, used, "\r\n\r\n", 4)))
+        {
+            break;
+        }
+        r = 0;
     }
-    printf("\"\"\"\n%s\n\"\"\"\n", request);
-    parse_request(request, &parsed_http, BUFFER_LEN);
+    int body_length = parse_headers(out, &parsed_http.request_line, &parsed_http.headers);
+    if (body_length)
+    {
+        int body_idx = needle_loc - out + 4;
+        int body_recieved = used - body_idx;
+        int remaining = body_length - body_recieved;
+        char *tmp_out = realloc(out, (used + remaining) * sizeof(char));
+        if (!tmp_out)
+        {
+            fprintf(stderr, "realloc err\n");
+            free(out);
+            close(client_fd);
+            free(arg);
+            return NULL;
+        }
+        out = tmp_out;
+        r = 0;
+        while (r < remaining)
+        {
+            ssize_t want = remaining - r;
+            ssize_t chunk = want > BUFFER_LEN ? want : BUFFER_LEN;
+
+            ssize_t n = recv(client_fd, tmp, chunk, 0);
+            if (n <= 0)
+            {
+                perror("recv failed");
+                free(out);
+                close(client_fd);
+                free(arg);
+                return NULL;
+            }
+            memcpy(out + used + r, tmp, n * sizeof(char));
+            r += n;
+        }
+        used += remaining;
+        parse_body(out, body_idx, &parsed_http.body);
+    }
 
     close(client_fd);
     free(arg);
