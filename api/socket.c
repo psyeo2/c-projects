@@ -42,6 +42,7 @@ void *memmem_simple(const void *haystack, size_t hay_len,
 
 void *handle_client(void *arg)
 {
+    ErrorCode error_code = OK;
     ClientContext *client_context = (ClientContext *)arg;
     int client_fd = client_context->client_fd;
     // struct sockaddr_in client_addr = client_context->client_addr;
@@ -61,6 +62,7 @@ void *handle_client(void *arg)
         if (r <= 0)
         {
             perror("recv failed");
+            parsed_http_free(&parsed_http);
             free(out);
             close(client_fd);
             free(arg);
@@ -71,6 +73,7 @@ void *handle_client(void *arg)
         if (!tmp_out)
         {
             fprintf(stderr, "realloc err\n");
+            parsed_http_free(&parsed_http);
             free(out);
             close(client_fd);
             free(arg);
@@ -83,7 +86,17 @@ void *handle_client(void *arg)
             break;
         }
     }
-    int content_length = parse_headers(out, &parsed_http.request_line, &parsed_http.headers);
+    int content_length = 0;
+    error_code = parse_headers(out, &parsed_http.request_line, &parsed_http.headers, &content_length);
+    if (error_code)
+    {
+        log_error(error_code);
+        parsed_http_free(&parsed_http);
+        free(out);
+        close(client_fd);
+        free(arg);
+        return NULL;
+    }
     if (content_length)
     {
         int body_idx = needle_loc - out + 4;
@@ -95,6 +108,7 @@ void *handle_client(void *arg)
             if (!tmp_out)
             {
                 fprintf(stderr, "realloc err\n");
+                parsed_http_free(&parsed_http);
                 free(out);
                 close(client_fd);
                 free(arg);
@@ -111,6 +125,7 @@ void *handle_client(void *arg)
                 if (n <= 0)
                 {
                     perror("recv failed");
+                    parsed_http_free(&parsed_http);
                     free(out);
                     close(client_fd);
                     free(arg);
@@ -121,7 +136,16 @@ void *handle_client(void *arg)
             }
             used += remaining;
         }
-        parse_body(out, body_idx, content_length, &parsed_http.body);
+        error_code = parse_body(out, body_idx, content_length, &parsed_http.body);
+        if (error_code)
+        {
+            log_error(error_code);
+            parsed_http_free(&parsed_http);
+            free(out);
+            close(client_fd);
+            free(arg);
+            return NULL;
+        }
     }
 
     parsed_http_print(parsed_http);

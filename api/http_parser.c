@@ -5,67 +5,141 @@
 #include <string.h>
 #include <ctype.h>
 
-int get_line_from_string(char **p, char *line)
+void log_error(ErrorCode e)
 {
-    int i = 0;
+    switch (e)
+    {
+    case OK:
+        fprintf(stderr, "No error! (How did you get here?)\n");
+        break;
+    case ERR_BAD_REQUEST_LINE:
+        fprintf(stderr, "Request line was malformed!\n");
+        break;
+    case ERR_METHOD_LENGTH:
+        fprintf(stderr, "Method was too long.\n");
+        break;
+    case ERR_TARGET_LENGTH:
+        fprintf(stderr, "Endpoint exceeded 256 chars.\n");
+        break;
+    case ERR_VERSION_LENGTH:
+        fprintf(stderr, "Was your version HTTP/1.1?\n");
+        break;
+    case ERR_HEADER_NAME_LENGTH:
+        fprintf(stderr, "Header name exceeded 256 chars.\n");
+        break;
+    case ERR_HEADER_VALUE_LENGTH:
+        fprintf(stderr, "Header value exceeded 256 chars.\n");
+        break;
+    case ERR_BAD_HEADER:
+        fprintf(stderr, "A header was malformed!\n");
+    case ERR_HEADERS_REALLOC_FAIL:
+        fprintf(stderr, "realloc failed, blame C.\n");
+        break;
+    case ERR_HEADERS_ASSIGN_FAIL:
+        fprintf(stderr, "Header name or value assignment failed, blame C.\n");
+        break;
+    case ERR_CONTENT_LENGTH:
+        fprintf(stderr, "content-length exceeded %d or could not be parsed\n", MAX_BODY_LENGTH);
+        break;
+    case ERR_PARSE_BODY_MALLOC_FAILED:
+        fprintf(stderr, "malloc failed, blame C.\n");
+        break;
+    case ERR_LINE_OOB:
+        fprintf(stderr, "A single header exceeded 1024 chars.\n");
+        break;
+    default:
+        fprintf(stderr, "Something went wrong... (Very wrong!)\n");
+    }
+}
+
+int get_line_from_string(char **p, char *line, int buffer_len, int *i)
+{
+    *i = 0;
 
     while (**p && **p != '\r')
     {
-        line[i++] = **p;
+        if (*i >= buffer_len)
+            return ERR_LINE_OOB;
+        line[(*i)++] = **p;
         (*p)++;
     }
 
     if (**p == '\r')
         (*p) += 2;
 
-    line[i] = '\0';
+    line[*i] = '\0';
 
-    return i;
+    return OK;
 }
 
-void parse_request_line(char *line, RequestLine *request_line)
+ErrorCode parse_request_line(char *line, RequestLine *request_line)
 {
-    int i = 0;
-    int pos = 0;
+    size_t i = 0;
+    size_t pos = 0;
     while (line[pos] && line[pos] != ' ')
     {
+        if (i > 6)
+            return ERR_METHOD_LENGTH;
         request_line->method[i++] = line[pos++];
     }
     request_line->method[i] = '\0';
 
+    if (line[pos] != ' ')
+        return ERR_BAD_REQUEST_LINE;
+
     i = 0;
     pos++;
     while (line[pos] && line[pos] != ' ')
     {
+        if (i > 254)
+            return ERR_TARGET_LENGTH;
         request_line->target[i++] = line[pos++];
     }
     request_line->target[i] = '\0';
 
+    if (line[pos] != ' ')
+        return ERR_BAD_REQUEST_LINE;
+
     i = 0;
     pos++;
     while (line[pos] && line[pos] != ' ')
     {
+        if (i > 14)
+            return ERR_VERSION_LENGTH;
         request_line->version[i++] = line[pos++];
     }
     request_line->version[i] = '\0';
+
+    if (line[pos] != '\0')
+        return ERR_BAD_REQUEST_LINE;
+
+    return OK;
 }
 
-void parse_header(char *line, char *name, char *value)
+ErrorCode parse_header(char *line, char *name, char *value)
 {
     int i = 0;
     int j = 0;
     while (line[i] && line[i] != ':')
     {
-        name[j++] = tolower(line[i++]);
+        if (j > 254)
+            return ERR_HEADER_NAME_LENGTH;
+        name[j++] = tolower((unsigned char)line[i++]);
     }
     name[j] = '\0';
     j = 0;
-    i += 2;
+
+    if (line[++i] != ' ')
+        return ERR_BAD_HEADER;
+    i++;
     while (line[i] && line[i] != '\r')
     {
+        if (j > 254)
+            return ERR_HEADER_VALUE_LENGTH;
         value[j++] = line[i++];
     }
     value[j] = '\0';
+    return OK;
 }
 
 void headers_init(Headers *h)
@@ -75,17 +149,19 @@ void headers_init(Headers *h)
     h->max_count = 0;
 }
 
-int headers_append(Headers *h, char *line)
+ErrorCode headers_append(Headers *h, char *line)
 {
     char name[256];
     char value[256];
-    parse_header(line, name, value);
+    ErrorCode error_code = OK;
+    if ((error_code = parse_header(line, name, value)))
+        return error_code;
     if (h->count == h->max_count)
     {
         size_t new_max = h->max_count ? h->max_count * 2 : 8;
         Header *new_headers = realloc(h->headers, new_max * sizeof(Header));
         if (!new_headers)
-            return -1;
+            return ERR_HEADERS_REALLOC_FAIL;
 
         h->headers = new_headers;
         h->max_count = new_max;
@@ -93,10 +169,13 @@ int headers_append(Headers *h, char *line)
     h->headers[h->count].name = strdup(name);
     h->headers[h->count].value = strdup(value);
     if (!h->headers[h->count].name || !h->headers[h->count].value)
-        return -1;
-
+    {
+        free(h->headers[h->count].name);
+        free(h->headers[h->count].value);
+        return ERR_HEADERS_ASSIGN_FAIL;
+    }
     h->count++;
-    return 0;
+    return OK;
 }
 
 int headers_search(Headers *h, char *search_string)
@@ -171,26 +250,44 @@ void parse_body_(Headers *h, long content_length_idx, char **p, char **body)
     (*body)[i] = '\0';
 }
 
-void parse_request(char *request, ParsedHttp *parsed_http, int buffer_len)
+ErrorCode parse_request(char *request, ParsedHttp *parsed_http, int buffer_len)
 {
     char line[buffer_len];
     char *p = request;
 
     int content_length_idx = -1;
 
+    ErrorCode error_code = OK;
+
     RequestLine request_line;
     Headers headers;
     headers_init(&headers);
 
-    if (get_line_from_string(&p, line))
+    int line_chars = 0;
+
+    error_code = get_line_from_string(&p, line, buffer_len, &line_chars);
+    if (error_code)
+        return error_code;
+    if (line_chars)
     {
-        parse_request_line(line, &request_line);
+        if ((error_code = parse_request_line(line, &request_line)) != OK)
+            return error_code;
         printf("Method: %s, Target: %s, Version: %s\n", request_line.method, request_line.target, request_line.version);
     }
 
-    while (get_line_from_string(&p, line))
+    line_chars = 0;
+    error_code = get_line_from_string(&p, line, buffer_len, &line_chars);
+    if (error_code)
+        return error_code;
+    while (line_chars)
     {
-        headers_append(&headers, line);
+        error_code = headers_append(&headers, line);
+        if (error_code)
+            return error_code;
+
+        error_code = get_line_from_string(&p, line, buffer_len, &line_chars);
+        if (error_code)
+            return error_code;
     }
     for (size_t i = 0; i < headers.count; i++)
     {
@@ -203,38 +300,65 @@ void parse_request(char *request, ParsedHttp *parsed_http, int buffer_len)
 
         printf("Body: %s\n", parsed_http->body);
     }
+    return error_code;
 }
 
-int parse_headers(char *buffer, RequestLine *request_line, Headers *headers)
+ErrorCode parse_headers(char *buffer, RequestLine *request_line, Headers *headers, int *content_length)
 {
     headers_init(headers);
-    char line[1024];
+    int buffer_len = 1024;
+    char line[buffer_len];
     char *p = buffer;
     int content_length_idx = -1;
     char *end;
+    ErrorCode error_code = OK;
+    int line_chars = 0;
 
-    if (get_line_from_string(&p, line))
+    error_code = get_line_from_string(&p, line, buffer_len, &line_chars);
+    if (error_code)
+        return error_code;
+    if (line_chars)
     {
-        parse_request_line(line, request_line);
+        error_code = parse_request_line(line, request_line);
+        if (error_code)
+            return error_code;
     }
-    while (get_line_from_string(&p, line))
+    line_chars = 0;
+    error_code = get_line_from_string(&p, line, buffer_len, &line_chars);
+    if (error_code)
+        return error_code;
+    while (line_chars)
     {
-        headers_append(headers, line);
+        error_code = headers_append(headers, line);
+        if (error_code)
+            return error_code;
+
+        error_code = get_line_from_string(&p, line, buffer_len, &line_chars);
+        if (error_code)
+            return error_code;
     }
     if ((content_length_idx = headers_search(headers, "content-length")) >= 0)
     {
-        return strtol(headers->headers[content_length_idx].value, &end, 10);
+        *content_length = strtol(headers->headers[content_length_idx].value, &end, 10);
+        if (*content_length > MAX_BODY_LENGTH || *content_length < 0)
+            error_code = ERR_CONTENT_LENGTH;
     }
-    return 0;
+    return error_code;
 }
 
-void parse_body(char *buffer, int body_idx, int content_length, char **body)
+ErrorCode parse_body(char *buffer, int body_idx, int content_length, char **body)
 {
-    *body = malloc(content_length * sizeof(char) + 1);
+    ErrorCode error_code = OK;
+    if (content_length > MAX_BODY_LENGTH || content_length < 0)
+        return ERR_CONTENT_LENGTH;
+    *body = malloc((content_length + 1) * sizeof(char));
+    if (!*body)
+        return ERR_PARSE_BODY_MALLOC_FAILED;
     int i;
     for (i = body_idx; i < body_idx + content_length; i++)
     {
         (*body)[i - body_idx] = buffer[i];
     }
-    (*body)[i] = '\0';
+    (*body)[content_length] = '\0';
+    return error_code;
 }
