@@ -3,20 +3,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-typedef struct
-{
-    char method[8];
-    char endpoint[256];
-    void (*handler)(ParsedRequest, HttpResponse *);
-} Route;
-
-typedef struct
-{
-    Route *routes;
-    int route_count;
-    int max_count;
-} Routes;
-
 void routes_init(Routes *r)
 {
     r->routes = NULL;
