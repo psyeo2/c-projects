@@ -1,10 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-// socket()
 #include <sys/socket.h>
-// sockaddr_in
 #include <netinet/in.h>
-// htons()
 #include <arpa/inet.h>
 #include <errno.h>
 #include <string.h>
@@ -13,6 +10,7 @@
 #include <signal.h>
 
 #include "http_parser.h"
+#include "router.h"
 
 #define PORT 3500
 #define BUFFER_LEN 1024
@@ -47,8 +45,8 @@ void *handle_client(void *arg)
     int client_fd = client_context->client_fd;
     // struct sockaddr_in client_addr = client_context->client_addr;
 
-    ParsedHttp parsed_http;
-    parsed_http_init(&parsed_http);
+    ParsedRequest parsed_request;
+    parsed_request_init(&parsed_request);
 
     ssize_t used = 0;
     ssize_t r = 0;
@@ -62,7 +60,7 @@ void *handle_client(void *arg)
         if (r <= 0)
         {
             perror("recv failed");
-            parsed_http_free(&parsed_http);
+            parsed_request_free(&parsed_request);
             free(out);
             close(client_fd);
             free(arg);
@@ -73,7 +71,7 @@ void *handle_client(void *arg)
         if (!tmp_out)
         {
             fprintf(stderr, "realloc err\n");
-            parsed_http_free(&parsed_http);
+            parsed_request_free(&parsed_request);
             free(out);
             close(client_fd);
             free(arg);
@@ -87,11 +85,15 @@ void *handle_client(void *arg)
         }
     }
     int content_length = 0;
-    error_code = parse_headers(out, &parsed_http.request_line, &parsed_http.headers, &content_length);
+    error_code = parse_headers(
+        out,
+        &parsed_request.request_line,
+        &parsed_request.headers,
+        &content_length);
     if (error_code)
     {
         log_error(error_code);
-        parsed_http_free(&parsed_http);
+        parsed_request_free(&parsed_request);
         free(out);
         close(client_fd);
         free(arg);
@@ -108,7 +110,7 @@ void *handle_client(void *arg)
             if (!tmp_out)
             {
                 fprintf(stderr, "realloc err\n");
-                parsed_http_free(&parsed_http);
+                parsed_request_free(&parsed_request);
                 free(out);
                 close(client_fd);
                 free(arg);
@@ -125,7 +127,7 @@ void *handle_client(void *arg)
                 if (n <= 0)
                 {
                     perror("recv failed");
-                    parsed_http_free(&parsed_http);
+                    parsed_request_free(&parsed_request);
                     free(out);
                     close(client_fd);
                     free(arg);
@@ -136,11 +138,11 @@ void *handle_client(void *arg)
             }
             used += remaining;
         }
-        error_code = parse_body(out, body_idx, content_length, &parsed_http.body);
+        error_code = parse_body(out, body_idx, content_length, &parsed_request.body);
         if (error_code)
         {
             log_error(error_code);
-            parsed_http_free(&parsed_http);
+            parsed_request_free(&parsed_request);
             free(out);
             close(client_fd);
             free(arg);
@@ -148,9 +150,17 @@ void *handle_client(void *arg)
         }
     }
 
-    parsed_http_print(parsed_http);
+    parsed_request_print(parsed_request);
 
-    parsed_http_free(&parsed_http);
+    HttpResponse http_response = router(parsed_request);
+    char *flattened_response;
+    int len = 0;
+    flattened_response = http_response_flatten(http_response, &len);
+    send(client_fd, flattened_response, len, 0);
+
+    free(flattened_response);
+    http_response_free(&http_response);
+    parsed_request_free(&parsed_request);
     free(out);
     close(client_fd);
     free(arg);

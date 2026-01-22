@@ -47,24 +47,31 @@ typedef struct
     RequestLine request_line;
     Headers headers;
     char *body;
-} ParsedHttp;
-
-typedef struct
-{
-    char version[16];
-    int status;
-    char reason[256];
-} ResponseLine;
+} ParsedRequest;
 
 void log_error(ErrorCode e);
 
-void parsed_http_init(ParsedHttp *p);
+// util
 
-void parsed_http_print(ParsedHttp p);
+void parsed_request_init(ParsedRequest *p);
 
-void parsed_http_free(ParsedHttp *p);
+void parsed_request_print(ParsedRequest p);
 
-ErrorCode parse_request(char *request, ParsedHttp *parsed_http, int buffer_len);
+void parsed_request_free(ParsedRequest *p);
+
+// headers
+
+void headers_init(Headers *h);
+
+ErrorCode headers_append(Headers *h, char *line);
+
+int headers_search(Headers *h, char *search_string);
+
+void headers_free(Headers *h);
+
+// parsing
+
+ErrorCode parse_request(char *request, ParsedRequest *parsed_request, int buffer_len);
 
 ErrorCode parse_headers(char *buffer, RequestLine *request_line, Headers *headers, int *content_length);
 

@@ -32,6 +32,7 @@ void log_error(ErrorCode e)
         break;
     case ERR_BAD_HEADER:
         fprintf(stderr, "A header was malformed!\n");
+        break;
     case ERR_HEADERS_REALLOC_FAIL:
         fprintf(stderr, "realloc failed, blame C.\n");
         break;
@@ -199,7 +200,7 @@ void headers_free(Headers *h)
     free(h->headers);
 }
 
-void parsed_http_init(ParsedHttp *p)
+void parsed_request_init(ParsedRequest *p)
 {
     Headers h;
     headers_init(&h);
@@ -208,7 +209,7 @@ void parsed_http_init(ParsedHttp *p)
     p->body = NULL;
 }
 
-void parsed_http_print(ParsedHttp p)
+void parsed_request_print(ParsedRequest p)
 {
     printf("Method: %s, Target: %s, Version: %s\n",
            p.request_line.method,
@@ -217,7 +218,10 @@ void parsed_http_print(ParsedHttp p)
 
     for (size_t i = 0; i < p.headers.count; i++)
     {
-        printf("Header %ld: {Name: %s, Value: %s}\n", i + 1, p.headers.headers[i].name, p.headers.headers[i].value);
+        printf("Header %ld: {Name: %s, Value: %s}\n",
+               i + 1,
+               p.headers.headers[i].name,
+               p.headers.headers[i].value);
     }
 
     if (p.body)
@@ -230,7 +234,7 @@ void parsed_http_print(ParsedHttp p)
     }
 }
 
-void parsed_http_free(ParsedHttp *p)
+void parsed_request_free(ParsedRequest *p)
 {
     headers_free(&p->headers);
     free(p->body);
@@ -250,7 +254,7 @@ void parse_body_(Headers *h, long content_length_idx, char **p, char **body)
     (*body)[i] = '\0';
 }
 
-ErrorCode parse_request(char *request, ParsedHttp *parsed_http, int buffer_len)
+ErrorCode parse_request(char *request, ParsedRequest *parsed_request, int buffer_len)
 {
     char line[buffer_len];
     char *p = request;
@@ -272,7 +276,10 @@ ErrorCode parse_request(char *request, ParsedHttp *parsed_http, int buffer_len)
     {
         if ((error_code = parse_request_line(line, &request_line)) != OK)
             return error_code;
-        printf("Method: %s, Target: %s, Version: %s\n", request_line.method, request_line.target, request_line.version);
+        printf("Method: %s, Target: %s, Version: %s\n",
+               request_line.method,
+               request_line.target,
+               request_line.version);
     }
 
     line_chars = 0;
@@ -291,19 +298,26 @@ ErrorCode parse_request(char *request, ParsedHttp *parsed_http, int buffer_len)
     }
     for (size_t i = 0; i < headers.count; i++)
     {
-        printf("Header %ld: {Name: %s, Value: %s}\n", i + 1, headers.headers[i].name, headers.headers[i].value);
+        printf("Header %ld: {Name: %s, Value: %s}\n",
+               i + 1,
+               headers.headers[i].name,
+               headers.headers[i].value);
     }
 
     if ((content_length_idx = headers_search(&headers, "content-length")) >= 0)
     {
-        parse_body_(&headers, content_length_idx, &p, &(parsed_http->body));
+        parse_body_(&headers, content_length_idx, &p, &(parsed_request->body));
 
-        printf("Body: %s\n", parsed_http->body);
+        printf("Body: %s\n", parsed_request->body);
     }
     return error_code;
 }
 
-ErrorCode parse_headers(char *buffer, RequestLine *request_line, Headers *headers, int *content_length)
+ErrorCode parse_headers(
+    char *buffer,
+    RequestLine *request_line,
+    Headers *headers,
+    int *content_length)
 {
     headers_init(headers);
     int buffer_len = 1024;
