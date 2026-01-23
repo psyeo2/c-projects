@@ -29,41 +29,6 @@ void method_not_allowed(HttpResponse *h)
     h->body = "{\"error\": \"Method Not Allowed\"}\n";
 }
 
-void routes_init(Routes *r)
-{
-    r->routes = NULL;
-    r->route_count = 0;
-    r->max_count = 0;
-}
-
-void routes_append(Routes *r, const char *method, const char *endpoint, void (*handler)(ParsedRequest, HttpResponse *))
-{
-    Route route;
-    strncpy(route.method, method, sizeof(route.method) - 1);
-    route.method[sizeof(route.method) - 1] = '\0';
-
-    strncpy(route.endpoint, endpoint, sizeof(route.endpoint) - 1);
-    route.endpoint[sizeof(route.endpoint) - 1] = '\0';
-
-    route.handler = handler;
-
-    if (r->route_count == r->max_count)
-    {
-        size_t new_max = r->max_count ? r->max_count * 2 : 8;
-        Route *new_routes = realloc(r->routes, new_max * sizeof(Route));
-        if (!new_routes)
-            return;
-
-        r->routes = new_routes;
-        r->max_count = new_max;
-    }
-
-    r->routes[r->route_count] = route;
-    // if (!r->routes[r->route_count])
-    //     return;
-    r->route_count++;
-}
-
 void routes_check(Routes r, ParsedRequest req, HttpResponse *res)
 {
     int path_matched = 0;
@@ -89,11 +54,6 @@ void routes_check(Routes r, ParsedRequest req, HttpResponse *res)
     {
         not_found(res);
     }
-}
-
-void routes_free(Routes *r)
-{
-    free(r->routes);
 }
 
 void http_response_init(HttpResponse *h)
@@ -190,8 +150,6 @@ HttpResponse router(ParsedRequest req)
 {
     HttpResponse res;
     http_response_init(&res);
-
-    ping_init();
 
     if (path_is(req.request_line.target, "/ping"))
     {

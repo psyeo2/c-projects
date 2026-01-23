@@ -74,9 +74,8 @@ typedef struct
 
 typedef struct
 {
-    Route *routes;
-    int route_count;
-    int max_count;
+    const Route *routes;
+    const int route_count;
 } Routes;
 
 typedef enum

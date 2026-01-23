@@ -16,18 +16,13 @@ void ping(ParsedRequest req, HttpResponse *res)
 
 void router_ping(ParsedRequest req, HttpResponse *res)
 {
-    static Routes routes;
-    static int init = 0;
-    if (!init)
-    {
-        routes_init(&routes);
+    static const Route routes[] = {
+        {"GET", "/ping", ping}
+    };
+    static const Routes table = {
+        .routes = routes,
+        .route_count = sizeof(routes) / sizeof(routes[0]),
+    };
 
-        routes_append(&routes, "GET", "/ping", ping);
-        // routes_append(&routes, "GET", "/ping", ping);
-        // routes_append(&routes, "GET", "/ping", ping);
-        
-        init = 1;
-    }
-
-    routes_check(routes, req, res);
+    routes_check(table, req, res);
 }
