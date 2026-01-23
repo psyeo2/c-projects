@@ -175,8 +175,27 @@ void *handle_client(void *arg)
     return NULL;
 }
 
+int get_port()
+{
+    const char *env = getenv("PORT");
+    if (!env)
+    {
+        fprintf(stderr, "Missing PORT environment variable, falling back to 3500.\n");
+        return 3500;
+    }
+    char *end;
+    int port = (int)strtol(env, &end, 10);
+    if (port <= 0 || port > 65535)
+    {
+        fprintf(stderr, "Port out of range, falling back to 3500.\n");
+        return 3500;
+    }
+    return port;
+}
+
 int main()
 {
+    int port = get_port();
     int socket_fd;
     int opt = 1;
     int err = 0;
@@ -201,7 +220,7 @@ int main()
 
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(PORT);
+    server_addr.sin_port = htons(port);
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
@@ -220,7 +239,7 @@ int main()
         return 1;
     }
 
-    printf("Server listening on %d\n", PORT);
+    printf("Server listening on %d\n", port);
 
     struct sockaddr_in client_addr;
     socklen_t client_addr_len;

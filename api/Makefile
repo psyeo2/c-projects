@@ -10,6 +10,11 @@ SRC = socket.c \
       routers/ping.c \
       routers/users.c
 
+ifneq (,$(wildcard bin/.env))
+include bin/.env
+export
+endif
+
 OBJ = $(SRC:%.c=$(BUILD_DIR)/%.o)
 
 all: $(TARGET)
@@ -26,3 +31,6 @@ clean:
 	rm -rf $(BUILD_DIR) bin
 
 .PHONY: all clean
+
+run: $(TARGET)
+	./bin/socket
