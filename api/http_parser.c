@@ -40,7 +40,7 @@ void log_error(ErrorCode e)
         fprintf(stderr, "Header name or value assignment failed, blame C.\n");
         break;
     case ERR_CONTENT_LENGTH:
-        fprintf(stderr, "content-length exceeded %d or could not be parsed\n", MAX_BODY_LENGTH);
+        fprintf(stderr, "Request exceeded %d bytes or could not be parsed\n", MAX_BODY_LENGTH);
         break;
     case ERR_PARSE_BODY_MALLOC_FAILED:
         fprintf(stderr, "malloc failed, blame C.\n");

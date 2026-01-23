@@ -9,11 +9,9 @@
 #include <pthread.h>
 #include <signal.h>
 
+#include "types.h"
 #include "http_parser.h"
 #include "router.h"
-
-#define PORT 3500
-#define BUFFER_LEN 1024
 
 typedef struct
 {
@@ -56,6 +54,16 @@ void *handle_client(void *arg)
 
     while (1)
     {
+        if (used > MAX_BODY_LENGTH)
+        {
+            error_code = ERR_CONTENT_LENGTH;
+            log_error(error_code);
+            parsed_request_free(&parsed_request);
+            free(out);
+            close(client_fd);
+            free(arg);
+            return NULL;
+        }
         r = recv(client_fd, tmp, BUFFER_LEN, 0);
         if (r <= 0)
         {
