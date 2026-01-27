@@ -4,13 +4,13 @@
 #include "types.h"
 #include "http_parser.h"
 
-void routes_init(Routes *r);
+// void routes_init(Routes *r);
 
-void routes_append(Routes *r, const char *method, const char *endpoint, void (*handler)(ParsedRequest, HttpResponse *));
+// void routes_append(Routes *r, const char *method, const char *endpoint, void (*handler)(ParsedRequest, HttpResponse *));
 
 void routes_check(Routes r, ParsedRequest req, HttpResponse *res);
 
-void routes_free(Routes *r);
+// void routes_free(Routes *r);
 
 void http_response_init(HttpResponse *h);
 
