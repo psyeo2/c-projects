@@ -9,9 +9,9 @@
 
 void not_found(HttpResponse *h)
 {
-    strcpy(h->response_line.version, "HTTP/1.1");
+    snprintf(h->response_line.version, sizeof(h->response_line.version), "HTTP/1.1");
     h->response_line.status = HTTP_STATUS_NOT_FOUND;
-    strcpy(h->response_line.reason, "Not Found");
+    snprintf(h->response_line.reason, sizeof(h->response_line.reason), "Not Found");
 
     headers_append(&h->headers, "Content-Type: application/json; charset=utf-8");
 
@@ -20,9 +20,9 @@ void not_found(HttpResponse *h)
 
 void method_not_allowed(HttpResponse *h)
 {
-    strcpy(h->response_line.version, "HTTP/1.1");
+    snprintf(h->response_line.version, sizeof(h->response_line.version), "HTTP/1.1");
     h->response_line.status = HTTP_STATUS_METHOD_NOT_ALLOWED;
-    strcpy(h->response_line.reason, "Method Not Allowed");
+    snprintf(h->response_line.reason, sizeof(h->response_line.reason), "Method Not Allowed");
 
     headers_append(&h->headers, "Content-Type: application/json; charset=utf-8");
 
@@ -58,9 +58,9 @@ void routes_check(Routes r, ParsedRequest req, HttpResponse *res)
 
 void http_response_init(HttpResponse *h)
 {
-    strcpy(h->response_line.version, "HTTP/1.1");
+    snprintf(h->response_line.version, sizeof(h->response_line.version), "HTTP/1.1");
     h->response_line.status = HTTP_STATUS_INTERNAL_SERVER_ERROR;
-    strcpy(h->response_line.reason, "HTTP Response Not Modified After Initialisation");
+    snprintf(h->response_line.reason, sizeof(h->response_line.reason), "HTTP Response Not Modified After Initialisation");
 
     Headers headers_;
     headers_init(&headers_);
@@ -96,46 +96,47 @@ char *http_response_flatten(HttpResponse h, int *len)
     for (int i = 0; i < (int)h.headers.count; i++)
     {
         response_len += strlen(h.headers.headers[i].name);
-        response_len += strlen(": ");
+        response_len += 2; // ": "
         response_len += strlen(h.headers.headers[i].value);
-        response_len += strlen("\r\n");
+        response_len += 2; // "\r\n"
     }
 
     response_len += strlen("Content-Length: ");
-    response_len += strlen(body_len_str) + 4;
+    response_len += strlen(body_len_str) + 4; // "\r\n"
     response_len += body_len;
 
+    response_len++; // '\0'
+
     // allocate
-    flattened_response = malloc((response_len + 1) * sizeof(char));
+    flattened_response = malloc(response_len * sizeof(char));
     if (!flattened_response)
         return NULL;
-    flattened_response[0] = '\0';
 
-    // construct flat response
-    strcat(flattened_response, h.response_line.version);
-    strcat(flattened_response, " ");
-    strcat(flattened_response, status_str);
-    strcat(flattened_response, " ");
-    strcat(flattened_response, h.response_line.reason);
-    strcat(flattened_response, "\r\n");
+    size_t remaining = response_len;
+    char *p = flattened_response;
+
+    int n = snprintf(p, remaining, "%s %s %s\r\n", h.response_line.version, status_str, h.response_line.reason);
+    p += n;
+    remaining -= n;
 
     for (int i = 0; i < (int)h.headers.count; i++)
     {
-        strcat(flattened_response, h.headers.headers[i].name);
-        strcat(flattened_response, ": ");
-        strcat(flattened_response, h.headers.headers[i].value);
-        strcat(flattened_response, "\r\n");
+        n = snprintf(p, remaining, "%s: %s\r\n", h.headers.headers[i].name, h.headers.headers[i].value);
+        p += n;
+        remaining -= n;
     }
 
-    strcat(flattened_response, "Content-Length: ");
-    strcat(flattened_response, body_len_str);
-    strcat(flattened_response, "\r\n\r\n");
-    if (body_len)
-    {
-        strcat(flattened_response, h.body);
-    }
+    n = snprintf(p, remaining, "Content-Length: %s\r\n\r\n", body_len_str);
+    p += n;
+    remaining -= n;
 
-    *len = response_len;
+    if (body_len) {
+        memcpy(p, h.body, body_len);
+        p += body_len;
+    }
+    *p = '\0';
+
+    *len = response_len - 1;
     return flattened_response;
 }
 

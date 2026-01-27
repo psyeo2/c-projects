@@ -1,13 +1,13 @@
 #include "ping.h"
 
-#include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 void ping(ParsedRequest req, HttpResponse *res)
 {
-    strcpy(res->response_line.version, "HTTP/1.1");
+    snprintf(res->response_line.version, sizeof(res->response_line.version), "HTTP/1.1");
     res->response_line.status = HTTP_STATUS_OK;
-    strcpy(res->response_line.reason, "OK");
+    snprintf(res->response_line.reason, sizeof(res->response_line.reason), "OK");
 
     headers_append(&res->headers, "Content-Type: application/json; charset=utf-8");
 
