@@ -833,7 +833,7 @@ curl http://localhost:3500/ping
 **Known Limitations**:
 - No request timeout implementation
 - No rate limiting
-- String operations use unsafe functions (`strcat`, `strcpy`) - should use safer variants
+// - String operations use unsafe functions (`strcat`, `strcpy`) - should use safer variants
 - No SSL/TLS support
 - Fixed-size buffers for request line components
 

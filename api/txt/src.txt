@@ -1,0 +1,4 @@
+https://datatracker.ietf.org/doc/html/rfc2616
+https://dev.to/jeffreythecoder/how-i-built-a-simple-http-server-from-scratch-using-c-739
+https://www.youtube.com/watch?v=set7R_bHG_k
+https://nachtimwald.com/2019/04/12/thread-pool-in-c/

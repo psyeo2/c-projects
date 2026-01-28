@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
+#include <poll.h>
+#include <fcntl.h>
 
 #include "types.h"
 #include "http_parser.h"
@@ -175,6 +177,90 @@ void *handle_client(void *arg)
     return NULL;
 }
 
+int request(Connection *c)
+{
+    char buffer[BUFFER_LEN];
+    ssize_t r = recv(c->fd, buffer, BUFFER_LEN, 0);
+    if (r == 0)
+    {
+        close(c->fd);
+        return -1;
+    }
+    if (r < 0)
+    {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return 0;
+        close(c->fd);
+        return -1;
+    }
+
+    char *needle_loc;
+    switch (c->state)
+    {
+    case CONN_READING_HEADERS:
+        char *p = c->buffer + c->buffer_used;
+        if (c->buffer_used + r > MAX_HEADER_LENGTH)
+        {
+            log_error(ERR_HEADER_LENGTH);
+            return -1;
+        }
+        memcpy(p, buffer, r);
+        c->buffer_used += r;
+        if ((needle_loc = (char *)memmem_simple(c->buffer, c->buffer_used, "\r\n\r\n", 4)))
+        {
+            ErrorCode e = parse_headers(c->buffer, &c->req.request_line, &c->req.headers, &c->content_length);
+            log_error(e);
+            if (c->content_length)
+            {
+                if (c->content_length > MAX_BODY_LENGTH)
+                {
+                    log_error(ERR_CONTENT_LENGTH);
+                    return -1;
+                }
+                int body_idx = needle_loc - c->buffer + 4;
+                c->buffer_used = c->buffer_used - body_idx;
+                p = c->buffer + body_idx;
+                c->req.body = malloc((c->content_length + 1) * sizeof(char));
+                memcpy(c->req.body, p, c->buffer_used);
+                c->state = CONN_READING_BODY;
+                return 0;
+            }
+            c->state = CONN_PROCESSING;
+            return 1;
+        }
+        return 0;
+    case CONN_READING_BODY:
+        if (c->buffer_used + r > MAX_BODY_LENGTH)
+        {
+            log_error(ERR_CONTENT_LENGTH);
+            return -1;
+        }
+        int remaining = c->content_length - c->buffer_used;
+        if (remaining <= 0)
+        {
+            c->state = CONN_PROCESSING;
+            return 1;
+        }
+        size_t to_copy = r > remaining ? remaining : r;
+        memcpy(c->req.body + c->buffer_used, buffer, to_copy);
+        c->buffer_used += to_copy;
+        if (c->buffer_used >= c->content_length)
+        {
+            c->req.body[c->content_length] = '\0';
+            c->state = CONN_PROCESSING;
+            return 1;
+        }
+        return 0;
+    default:
+        printf("How did you get here?\n");
+        return -1;
+    }
+}
+
+void response(Connection *c)
+{
+}
+
 int get_port()
 {
     const char *env = getenv("PORT");
@@ -191,6 +277,31 @@ int get_port()
         return 3500;
     }
     return port;
+}
+
+void connection_init(Connection *c)
+{
+    c->fd = -1;
+    c->state = CONN_READING_HEADERS;
+    c->buffer[0] = '\0';
+    c->buffer_used = 0;
+    c->content_length = 0;
+    parsed_request_init(&c->req);
+    http_response_init(&c->res);
+}
+
+void connection_reset(Connection *c)
+{
+    connection_free(c);
+    connection_init(c);
+}
+
+void connection_free(Connection *c)
+{
+    if (c->fd > -1)
+        close(c->fd);
+    parsed_request_free(&c->req);
+    http_response_free(&c->res);
 }
 
 int main()
@@ -242,40 +353,102 @@ int main()
     printf("Server listening on %d\n", port);
 
     struct sockaddr_in client_addr;
-    socklen_t client_addr_len;
+    socklen_t client_addr_len = sizeof(client_addr);
     int client_fd;
     ClientContext *client_context;
+
+    struct pollfd fds[MAX_CLIENTS + 1];
+    Connection connections[MAX_CLIENTS + 1];
+    int flags = fcntl(client_fd, F_GETFL, 0);
+    if (flags == -1)
+    {
+        perror("flags init failed");
+    }
+    for (int i = 1; i < MAX_CLIENTS + 1; i++)
+    {
+        connection_init(&connections[i]);
+    }
+    for (int i = 0; i < MAX_CLIENTS + 1; i++)
+    {
+        fds[i].fd = -1;
+    }
+    fds[0].fd = socket_fd;
+    fds[0].events = POLLIN;
+
     while (1)
     {
-        client_addr_len = sizeof(client_addr);
+        poll(fds, MAX_CLIENTS + 1, TIMEOUT);
 
-        if ((client_fd = accept(socket_fd, (struct sockaddr *)&client_addr, &client_addr_len)) < 0)
+        // handle new incoming connection
+        if (fds[0].revents & POLLIN)
         {
-            err = errno;
-            fprintf(stderr, "accept failed: %s\n", strerror(err));
-            continue;
+            if ((client_fd = accept(socket_fd, (struct sockaddr *)&client_addr, &client_addr_len)) < 0)
+            {
+                perror("accept failed");
+                continue;
+            }
+            if (fcntl(client_fd, F_SETFL, flags | O_NONBLOCK) == -1)
+            {
+                perror("set non blocking failed");
+                continue;
+            }
+            for (int i = 1; i < MAX_CLIENTS + 1; i++)
+            {
+                if (fds[i].fd < 0)
+                {
+                    fds[i].fd = client_fd;
+                    fds[i].events = POLLIN;
+                    connection_reset(&connections[i]);
+                    connections[i].fd = client_fd;
+                    break;
+                }
+            }
         }
+        // client_context = malloc(sizeof(ClientContext));
+        // if (!client_context)
+        // {
+        //     close(client_fd);
+        //     continue;
+        // }
 
-        client_context = malloc(sizeof(ClientContext));
-        if (!client_context)
+        // client_context->client_fd = client_fd;
+        // client_context->client_addr = client_addr;
+
+        for (int i = 1; i < MAX_CLIENTS + 1; i++)
         {
-            close(client_fd);
-            continue;
-        }
+            if (fds[i].fd == -1)
+                continue;
 
-        client_context->client_fd = client_fd;
-        client_context->client_addr = client_addr;
-
-        pthread_t thread_id;
-        if ((pthread_create(&thread_id, NULL, handle_client, (void *)client_context)) != 0)
-        {
-            err = errno;
-            fprintf(stderr, "pthread_create failed: %s\n", strerror(err));
-            free(client_context);
-            close(client_fd);
-            continue;
+            if (fds[i].revents & POLLIN)
+            {
+                int req_ret = request(&connections[i]);
+                switch (req_ret)
+                {
+                case -1:
+                    connection_reset(&fds[i]);
+                    continue;
+                case 0:
+                    continue;
+                case 1:
+                    router(connections[i]);
+                    break;
+                }
+            }
+            if (fds[i].revents & POLLOUT)
+            {
+                response(&connections[i]);
+            }
+            if (fds[i].revents & (POLLHUP | POLLERR | POLLNVAL))
+            {
+                close(fds[i].fd);
+                fds[i].fd = -1;
+            }
         }
-        pthread_detach(thread_id);
+    }
+
+    for (int i = 1; i < MAX_CLIENTS + 1; i++)
+    {
+        connection_free(&connections[i]);
     }
 
     close(socket_fd);

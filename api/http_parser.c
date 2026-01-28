@@ -10,7 +10,6 @@ void log_error(ErrorCode e)
     switch (e)
     {
     case OK:
-        fprintf(stderr, "No error! (How did you get here?)\n");
         break;
     case ERR_BAD_REQUEST_LINE:
         fprintf(stderr, "Request line was malformed!\n");
@@ -38,6 +37,9 @@ void log_error(ErrorCode e)
         break;
     case ERR_HEADERS_ASSIGN_FAIL:
         fprintf(stderr, "Header name or value assignment failed, blame C.\n");
+        break;
+    case ERR_HEADER_LENGTH:
+        fprintf(stderr, "Total headers exceeded %d bytes.\n", MAX_HEADER_LENGTH);
         break;
     case ERR_CONTENT_LENGTH:
         fprintf(stderr, "Request exceeded %d bytes or could not be parsed\n", MAX_BODY_LENGTH);

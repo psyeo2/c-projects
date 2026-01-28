@@ -4,8 +4,11 @@
 #include <stddef.h>
 
 // #define PORT 3500
+#define MAX_CLIENTS 20
+#define TIMEOUT 5000
 #define BUFFER_LEN 1024
 #define MAX_BODY_LENGTH 1048576
+#define MAX_HEADER_LENGTH 8192
 
 typedef enum
 {
@@ -19,10 +22,19 @@ typedef enum
     ERR_BAD_HEADER,
     ERR_HEADERS_REALLOC_FAIL,
     ERR_HEADERS_ASSIGN_FAIL,
+    ERR_HEADER_LENGTH,
     ERR_CONTENT_LENGTH,
     ERR_PARSE_BODY_MALLOC_FAILED,
     ERR_LINE_OOB,
 } ErrorCode;
+
+typedef enum
+{
+    CONN_READING_HEADERS,
+    CONN_READING_BODY,
+    CONN_PROCESSING,
+    CONN_RESPONDING,
+} ConnectionState;
 
 typedef struct
 {
@@ -64,6 +76,17 @@ typedef struct
     Headers headers;
     char *body;
 } HttpResponse;
+
+typedef struct
+{
+    int fd;
+    ConnectionState state;
+    char buffer[BUFFER_LEN];
+    size_t buffer_used;
+    int content_length;
+    ParsedRequest req;
+    HttpResponse res;
+} Connection;
 
 typedef struct
 {
