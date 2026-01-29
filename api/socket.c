@@ -71,7 +71,7 @@ int request(Connection *c)
         c->buffer_used += r;
         // if (r > 0)
         // {
-        //     c->buffer[c->buffer_used] = '\0'; // this is good notionally, but might overwrite body bytes
+        //     c->buffer[c->buffer_used] = '\0'; // todo: this is good notionally, but might overwrite body bytes
         // }
         if ((needle_loc = (char *)memmem_simple(c->buffer, c->buffer_used, "\r\n\r\n", 4)))
         {
@@ -102,7 +102,7 @@ int request(Connection *c)
                     log_error(ERR_CONTENT_LENGTH);
                     return -1;
                 }
-                memcpy(c->req.body, p, c->buffer_used); // use cont
+                memcpy(c->req.body, p, c->buffer_used);
                 if (c->buffer_used == c->content_length)
                 {
                     c->req.body[c->content_length] = '\0';
@@ -338,7 +338,8 @@ int main()
             }
             if (!assigned)
                 close(client_fd);
-            // logic for if clients is full? make em wait or at least close the connection
+            // todo: timeout stale connections?
+            // todo: logic for if clients is full? make em wait or at least close the connection
         }
 
         for (int i = 1; i < MAX_CLIENTS + 1; i++)
