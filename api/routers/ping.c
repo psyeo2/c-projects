@@ -5,6 +5,7 @@
 
 void ping(ParsedRequest req, HttpResponse *res)
 {
+    (void)req;
     snprintf(res->response_line.version, sizeof(res->response_line.version), "HTTP/1.1");
     res->response_line.status = HTTP_STATUS_OK;
     snprintf(res->response_line.reason, sizeof(res->response_line.reason), "OK");

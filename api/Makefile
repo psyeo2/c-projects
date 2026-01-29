@@ -10,8 +10,8 @@ SRC = socket.c \
       routers/ping.c \
       routers/users.c
 
-ifneq (,$(wildcard bin/.env))
-include bin/.env
+ifneq (,$(wildcard .env))
+include .env
 export
 endif
 

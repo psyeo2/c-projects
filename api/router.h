@@ -16,7 +16,7 @@ void http_response_init(HttpResponse *h);
 
 void http_response_free(HttpResponse *r);
 
-char *http_response_flatten(HttpResponse h, int *len);
+char *http_response_flatten(HttpResponse h, size_t *len);
 
 HttpResponse router(ParsedRequest r);
 

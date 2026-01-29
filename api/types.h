@@ -2,11 +2,13 @@
 #define TYPES_H
 
 #include <stddef.h>
+#include <sys/types.h>
 
 // #define PORT 3500
 #define MAX_CLIENTS 20
 #define TIMEOUT 5000
-#define BUFFER_LEN 1024
+// todo: BUFFER_LEN way too big, but can't be different to MAX_HEADER_LENGTH atm due to request() in socket.c
+#define BUFFER_LEN 8192
 #define MAX_BODY_LENGTH 1048576
 #define MAX_HEADER_LENGTH 8192
 
@@ -33,7 +35,8 @@ typedef enum
     CONN_READING_HEADERS,
     CONN_READING_BODY,
     CONN_PROCESSING,
-    CONN_RESPONDING,
+    CONN_RESPONSE_FLATTEN,
+    CONN_RESPONSE_SEND,
 } ConnectionState;
 
 typedef struct
@@ -83,9 +86,12 @@ typedef struct
     ConnectionState state;
     char buffer[BUFFER_LEN];
     size_t buffer_used;
-    int content_length;
+    size_t content_length;
     ParsedRequest req;
     HttpResponse res;
+    size_t f_r_len;
+    size_t f_r_sent;
+    char *flattened_response;
 } Connection;
 
 typedef struct

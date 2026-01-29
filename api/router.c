@@ -72,10 +72,12 @@ void http_response_init(HttpResponse *h)
 void http_response_free(HttpResponse *r)
 {
     headers_free(&r->headers);
-    // free(r->body);
+    // todo: why does this cause "free(): invalid pointer"
+    // if (r->body)
+    //     free(r->body);
 }
 
-char *http_response_flatten(HttpResponse h, int *len)
+char *http_response_flatten(HttpResponse h, size_t *len)
 {
     char *flattened_response;
 

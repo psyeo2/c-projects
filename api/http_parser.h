@@ -27,10 +27,6 @@ void headers_free(Headers *h);
 
 // parsing
 
-ErrorCode parse_request(char *request, ParsedRequest *parsed_request, int buffer_len);
-
-ErrorCode parse_headers(char *buffer, RequestLine *request_line, Headers *headers, int *content_length);
-
-ErrorCode parse_body(char* buffer, int body_idx, int content_length, char **body);
+ErrorCode parse_headers(char *buffer, RequestLine *request_line, Headers *headers, size_t *content_length);
 
 #endif
