@@ -14,6 +14,7 @@
 #include "types.h"
 #include "http_parser.h"
 #include "router.h"
+#include "lib/thread_pool.h"
 
 typedef struct
 {
@@ -202,6 +203,8 @@ int get_port()
 
 void connection_init(Connection *c)
 {
+    pthread_mutex_init(&c->mutex, NULL);
+    c->done = 0;
     c->fd = -1;
     c->state = CONN_READING_HEADERS;
     c->buffer[0] = '\0';
@@ -216,6 +219,7 @@ void connection_init(Connection *c)
 
 void connection_free(Connection *c)
 {
+    pthread_mutex_destroy(&c->mutex);
     parsed_request_free(&c->req);
     http_response_free(&c->res);
     if (c->flattened_response)
@@ -236,6 +240,17 @@ void drop_connection(struct pollfd *pfd, Connection *c)
     pfd->events = 0;
 }
 
+void process_request(void *arg)
+{
+    Connection *c = (Connection *)arg;
+    router(c);
+
+    pthread_mutex_lock(&c->mutex);
+    c->state = CONN_RESPONSE_FLATTEN;
+    c->done = 1;
+    pthread_mutex_unlock(&c->mutex);
+}
+
 int main()
 {
     int port = get_port();
@@ -245,6 +260,7 @@ int main()
 
     signal(SIGPIPE, SIG_IGN);
 
+    // setup listening socket
     if ((socket_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         perror("socket failed");
@@ -278,6 +294,15 @@ int main()
     }
 
     printf("Server listening on %d\n", port);
+
+    // setup thread pool
+    tpool_t *thread_pool = tpool_create(NUM_THREADS);
+    if (!thread_pool)
+    {
+        fprintf(stderr, "Thread pool creation failed\n");
+        close(socket_fd);
+        return 1;
+    }
 
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
@@ -346,6 +371,15 @@ int main()
         {
             if (fds[i].fd == -1)
                 continue;
+
+            pthread_mutex_lock(&connections[i].mutex);
+            if (connections[i].done)
+            {
+                connections[i].done = 0;
+                fds[i].events = POLLOUT;
+            }
+            pthread_mutex_unlock(&connections[i].mutex);
+
             if (fds[i].revents & (POLLHUP | POLLERR | POLLNVAL))
             {
                 drop_connection(&fds[i], &connections[i]);
@@ -363,9 +397,10 @@ int main()
                 case 0:
                     continue;
                 case 1:
-                    connections[i].res = router(connections[i].req);
-                    connections[i].state = CONN_RESPONSE_FLATTEN;
-                    fds[i].events = POLLOUT;
+                    // connections[i].res = router(connections[i].req);
+                    connections[i].state = CONN_PROCESSING;
+                    tpool_add_work(thread_pool, process_request, &connections[i]);
+                    fds[i].events = 0;
                     continue;
                 }
             }
@@ -392,7 +427,7 @@ int main()
     {
         connection_free(&connections[i]);
     }
-
+    tpool_destroy(thread_pool);
     close(socket_fd);
     return 0;
 }

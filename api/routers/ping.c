@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void ping(ParsedRequest req, HttpResponse *res)
+void ping(HttpRequest req, HttpResponse *res)
 {
     (void)req;
     snprintf(res->response_line.version, sizeof(res->response_line.version), "HTTP/1.1");
@@ -15,7 +15,7 @@ void ping(ParsedRequest req, HttpResponse *res)
     res->body = "{\"message\": \"pong\"}\n";
 }
 
-void router_ping(ParsedRequest req, HttpResponse *res)
+void router_ping(HttpRequest req, HttpResponse *res)
 {
     static const Route routes[] = {
         {"GET", "/ping", ping}

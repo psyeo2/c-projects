@@ -9,11 +9,11 @@ void log_error(ErrorCode e);
 
 // util
 
-void parsed_request_init(ParsedRequest *p);
+void parsed_request_init(HttpRequest *req);
 
-void parsed_request_print(ParsedRequest p);
+void parsed_request_print(HttpRequest req);
 
-void parsed_request_free(ParsedRequest *p);
+void parsed_request_free(HttpRequest *req);
 
 // headers
 

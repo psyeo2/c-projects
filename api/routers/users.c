@@ -1,6 +1,6 @@
 #include "users.h"
 
-void router_users(ParsedRequest req, HttpResponse *res)
+void router_users(HttpRequest req, HttpResponse *res)
 {
     (void)req;
     (void)res;

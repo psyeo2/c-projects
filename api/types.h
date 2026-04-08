@@ -1,10 +1,11 @@
 #ifndef TYPES_H
 #define TYPES_H
 
+#include <pthread.h>
 #include <stddef.h>
 #include <sys/types.h>
 
-// #define PORT 3500
+#define NUM_THREADS 4
 #define MAX_CLIENTS 20
 #define TIMEOUT 5000
 // todo: BUFFER_LEN way too big, but can't be different to MAX_HEADER_LENGTH atm due to request() in socket.c
@@ -64,7 +65,7 @@ typedef struct
     RequestLine request_line;
     Headers headers;
     char *body;
-} ParsedRequest;
+} HttpRequest;
 
 typedef struct
 {
@@ -82,12 +83,14 @@ typedef struct
 
 typedef struct
 {
+    pthread_mutex_t mutex;
+    int done;
     int fd;
     ConnectionState state;
     char buffer[BUFFER_LEN];
     size_t buffer_used;
     size_t content_length;
-    ParsedRequest req;
+    HttpRequest req;
     HttpResponse res;
     size_t f_r_len;
     size_t f_r_sent;
@@ -98,7 +101,7 @@ typedef struct
 {
     char method[8];
     char endpoint[256];
-    void (*handler)(ParsedRequest, HttpResponse *);
+    void (*handler)(HttpRequest, HttpResponse *);
 } Route;
 
 typedef struct

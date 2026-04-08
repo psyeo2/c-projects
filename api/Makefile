@@ -7,6 +7,7 @@ BUILD_DIR = build
 SRC = socket.c \
       http_parser.c \
       router.c \
+	  lib/thread_pool.c \
       routers/ping.c \
       routers/users.c
 

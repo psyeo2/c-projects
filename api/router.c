@@ -29,7 +29,7 @@ void method_not_allowed(HttpResponse *h)
     h->body = "{\"error\": \"Method Not Allowed\"}\n";
 }
 
-void routes_check(Routes r, ParsedRequest req, HttpResponse *res)
+void routes_check(Routes r, HttpRequest req, HttpResponse *res)
 {
     int path_matched = 0;
     char *method = req.request_line.method;
@@ -149,23 +149,25 @@ int path_is(const char *path, const char *prefix)
            (path[len] == '\0' || path[len] == '/');
 }
 
-HttpResponse router(ParsedRequest req)
+void router(Connection *c)
 {
     HttpResponse res;
     http_response_init(&res);
 
-    if (path_is(req.request_line.target, "/ping"))
+    if (path_is(c->req.request_line.target, "/ping"))
     {
-        router_ping(req, &res);
-        return res;
+        router_ping(c->req, &res);
+        c->res = res;
+        return;
     }
 
-    if (path_is(req.request_line.target, "/users"))
+    if (path_is(c->req.request_line.target, "/users"))
     {
-        router_users(req, &res);
-        return res;
+        router_users(c->req, &res);
+        c->res = res;
+        return;
     }
 
     not_found(&res);
-    return res;
+    c->res = res;
 }

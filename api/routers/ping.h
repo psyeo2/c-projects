@@ -5,6 +5,6 @@
 #include "../router.h"
 #include "../http_parser.h"
 
-void router_ping(ParsedRequest req, HttpResponse *res);
+void router_ping(HttpRequest req, HttpResponse *res);
 
 #endif

@@ -209,33 +209,33 @@ void headers_free(Headers *h)
     free(h->headers);
 }
 
-void parsed_request_init(ParsedRequest *p)
+void parsed_request_init(HttpRequest *req)
 {
     Headers h;
     headers_init(&h);
 
-    p->headers = h;
-    p->body = NULL;
+    req->headers = h;
+    req->body = NULL;
 }
 
-void parsed_request_print(ParsedRequest p)
+void parsed_request_print(HttpRequest req)
 {
     printf("Method: %s, Target: %s, Version: %s\n",
-           p.request_line.method,
-           p.request_line.target,
-           p.request_line.version);
+           req.request_line.method,
+           req.request_line.target,
+           req.request_line.version);
 
-    for (size_t i = 0; i < p.headers.count; i++)
+    for (size_t i = 0; i < req.headers.count; i++)
     {
         printf("Header %ld: {Name: %s, Value: %s}\n",
                i + 1,
-               p.headers.headers[i].name,
-               p.headers.headers[i].value);
+               req.headers.headers[i].name,
+               req.headers.headers[i].value);
     }
 
-    if (p.body)
+    if (req.body)
     {
-        printf("Body: %s\n", p.body);
+        printf("Body: %s\n", req.body);
     }
     else
     {
@@ -243,11 +243,11 @@ void parsed_request_print(ParsedRequest p)
     }
 }
 
-void parsed_request_free(ParsedRequest *p)
+void parsed_request_free(HttpRequest *req)
 {
-    headers_free(&p->headers);
-    if (p->body)
-        free(p->body);
+    headers_free(&req->headers);
+    if (req->body)
+        free(req->body);
 }
 
 ErrorCode parse_headers(

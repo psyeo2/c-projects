@@ -61,7 +61,7 @@ typedef struct {
     RequestLine request_line;
     Headers headers;
     char *body;
-} ParsedRequest;
+} HttpRequest;
 ```
 
 ### Response Structures
@@ -86,7 +86,7 @@ typedef struct {
 typedef struct {
     char method[8];
     char endpoint[256];
-    void (*handler)(ParsedRequest, HttpResponse *);
+    void (*handler)(HttpRequest, HttpResponse *);
 } Route;
 
 typedef struct {
@@ -431,7 +431,7 @@ ErrorCode parse_body(char *buffer, int body_idx, int content_length, char **body
 The router uses a path-prefix matching system:
 
 ```c
-HttpResponse router(ParsedRequest req) {
+HttpResponse router(HttpRequest req) {
     HttpResponse res;
     http_response_init(&res);
     
@@ -463,7 +463,7 @@ This allows matching both `/ping` and `/ping/whatever`.
 Each endpoint has its own sub-router that handles method-specific routing:
 
 ```c
-void router_ping(ParsedRequest req, HttpResponse *res) {
+void router_ping(HttpRequest req, HttpResponse *res) {
     static const Route routes[] = {
         {"GET", "/ping", ping}
     };
@@ -479,7 +479,7 @@ void router_ping(ParsedRequest req, HttpResponse *res) {
 ### Route Checking Logic
 
 ```c
-void routes_check(Routes r, ParsedRequest req, HttpResponse *res) {
+void routes_check(Routes r, HttpRequest req, HttpResponse *res) {
     int path_matched = 0;
     char *method = req.request_line.method;
     char *target = req.request_line.target;
@@ -586,7 +586,7 @@ Content-Length: 23
 ### Example: Ping Handler
 
 ```c
-void ping(ParsedRequest req, HttpResponse *res) {
+void ping(HttpRequest req, HttpResponse *res) {
     strcpy(res->response_line.version, "HTTP/1.1");
     res->response_line.status = HTTP_STATUS_OK;
     strcpy(res->response_line.reason, "OK");
@@ -741,7 +741,7 @@ To add a new route:
 #define MYROUTE_H
 #include "../types.h"
 #include "../router.h"
-void router_myroute(ParsedRequest req, HttpResponse *res);
+void router_myroute(HttpRequest req, HttpResponse *res);
 #endif
 ```
 
@@ -750,7 +750,7 @@ void router_myroute(ParsedRequest req, HttpResponse *res);
 // routers/myroute.c
 #include "myroute.h"
 
-void get_myroute(ParsedRequest req, HttpResponse *res) {
+void get_myroute(HttpRequest req, HttpResponse *res) {
     strcpy(res->response_line.version, "HTTP/1.1");
     res->response_line.status = HTTP_STATUS_OK;
     strcpy(res->response_line.reason, "OK");
@@ -758,7 +758,7 @@ void get_myroute(ParsedRequest req, HttpResponse *res) {
     res->body = "{\"data\": \"value\"}\n";
 }
 
-void router_myroute(ParsedRequest req, HttpResponse *res) {
+void router_myroute(HttpRequest req, HttpResponse *res) {
     static const Route routes[] = {
         {"GET", "/myroute", get_myroute}
     };
@@ -774,7 +774,7 @@ void router_myroute(ParsedRequest req, HttpResponse *res) {
 ```c
 #include "routers/myroute.h"
 
-HttpResponse router(ParsedRequest req) {
+HttpResponse router(HttpRequest req) {
     HttpResponse res;
     http_response_init(&res);
     
