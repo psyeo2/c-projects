@@ -40,6 +40,14 @@ typedef enum
     CONN_RESPONSE_SEND,
 } ConnectionState;
 
+typedef enum
+{
+    REQUEST_RESULT_CLOSE,
+    REQUEST_RESULT_PENDING,
+    REQUEST_RESULT_READY,
+    REQUEST_RESULT_ERROR_RESPONSE,
+} RequestResult;
+
 typedef struct
 {
     char method[8];

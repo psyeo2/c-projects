@@ -6,13 +6,7 @@
 void ping(HttpRequest req, HttpResponse *res)
 {
     (void)req;
-    snprintf(res->response_line.version, sizeof(res->response_line.version), "HTTP/1.1");
-    res->response_line.status = HTTP_STATUS_OK;
-    snprintf(res->response_line.reason, sizeof(res->response_line.reason), "OK");
-
-    headers_append(&res->headers, "Content-Type: application/json; charset=utf-8");
-
-    http_response_set_body(res, "{\"message\": \"pong\"}\n");
+    http_response_set_json(res, HTTP_STATUS_OK, "OK", "{\"message\": \"pong\"}\n");
 }
 
 void router_ping(HttpRequest req, HttpResponse *res)

@@ -7,6 +7,14 @@
 #include "routers/ping.h"
 #include "routers/users.h"
 
+/* Set the HTTP status line fields on a response. */
+void http_response_set_status(HttpResponse *h, HttpStatusCode status, const char *reason)
+{
+    snprintf(h->response_line.version, sizeof(h->response_line.version), "HTTP/1.1");
+    h->response_line.status = status;
+    snprintf(h->response_line.reason, sizeof(h->response_line.reason), "%s", reason);
+}
+
 /* Replace the response body with an owned heap copy of the provided string. */
 int http_response_set_body(HttpResponse *r, const char *body)
 {
@@ -28,28 +36,41 @@ int http_response_set_body(HttpResponse *r, const char *body)
     return 0;
 }
 
+/* Set a JSON response with explicit status and a body owned by the response. */
+int http_response_set_json(HttpResponse *r, HttpStatusCode status, const char *reason, const char *body)
+{
+    http_response_set_status(r, status, reason);
+
+    if (headers_append(&r->headers, "Content-Type: application/json; charset=utf-8") != OK)
+        goto fail;
+
+    if (http_response_set_body(r, body) != 0)
+        goto fail;
+
+    return 0;
+
+fail:
+    headers_free(&r->headers);
+    headers_init(&r->headers);
+    if (r->body != NULL)
+    {
+        free(r->body);
+        r->body = NULL;
+    }
+    http_response_set_status(r, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
+    return -1;
+}
+
 /* Populate a standard JSON 404 response. */
 void not_found(HttpResponse *h)
 {
-    snprintf(h->response_line.version, sizeof(h->response_line.version), "HTTP/1.1");
-    h->response_line.status = HTTP_STATUS_NOT_FOUND;
-    snprintf(h->response_line.reason, sizeof(h->response_line.reason), "Not Found");
-
-    headers_append(&h->headers, "Content-Type: application/json; charset=utf-8");
-
-    http_response_set_body(h, "{\"error\": \"Not Found\"}\n");
+    http_response_set_json(h, HTTP_STATUS_NOT_FOUND, "Not Found", "{\"error\": \"Not Found\"}\n");
 }
 
 /* Populate a standard JSON 405 response for matched paths with wrong methods. */
 void method_not_allowed(HttpResponse *h)
 {
-    snprintf(h->response_line.version, sizeof(h->response_line.version), "HTTP/1.1");
-    h->response_line.status = HTTP_STATUS_METHOD_NOT_ALLOWED;
-    snprintf(h->response_line.reason, sizeof(h->response_line.reason), "Method Not Allowed");
-
-    headers_append(&h->headers, "Content-Type: application/json; charset=utf-8");
-
-    http_response_set_body(h, "{\"error\": \"Method Not Allowed\"}\n");
+    http_response_set_json(h, HTTP_STATUS_METHOD_NOT_ALLOWED, "Method Not Allowed", "{\"error\": \"Method Not Allowed\"}\n");
 }
 
 /* Resolve a route table against a request and dispatch the matched handler. */
@@ -83,9 +104,7 @@ void routes_check(Routes r, HttpRequest req, HttpResponse *res)
 /* Initialise a response object with a known fallback error state. */
 void http_response_init(HttpResponse *h)
 {
-    snprintf(h->response_line.version, sizeof(h->response_line.version), "HTTP/1.1");
-    h->response_line.status = HTTP_STATUS_INTERNAL_SERVER_ERROR;
-    snprintf(h->response_line.reason, sizeof(h->response_line.reason), "HTTP Response Not Modified After Initialisation");
+    http_response_set_status(h, HTTP_STATUS_INTERNAL_SERVER_ERROR, "HTTP Response Not Modified After Initialisation");
 
     Headers headers_;
     headers_init(&headers_);

@@ -26,6 +26,30 @@ typedef struct
 
 static int worker_done_fd = -1;
 
+/* Map parser and request-size failures to HTTP status codes. */
+static HttpStatusCode request_error_status(ErrorCode error)
+{
+    switch (error)
+    {
+    case ERR_CONTENT_LENGTH:
+        return HTTP_STATUS_CONTENT_TOO_LARGE;
+    case ERR_HEADER_LENGTH:
+        return HTTP_STATUS_REQUEST_HEADER_FIELDS_TOO_LARGE;
+    default:
+        return HTTP_STATUS_BAD_REQUEST;
+    }
+}
+
+/* Build a simple JSON error response on the connection for immediate sending. */
+static void prepare_error_response(Connection *c, HttpStatusCode status, const char *reason, const char *body)
+{
+    http_response_free(&c->res);
+    http_response_init(&c->res);
+    if (http_response_set_json(&c->res, status, reason, body) != 0)
+        http_response_set_status(&c->res, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
+    c->state = CONN_RESPONSE_FLATTEN;
+}
+
 /* Find the first occurrence of a byte sequence in a fixed-size buffer. */
 void *memmem_simple(const void *haystack, size_t hay_len,
                     const void *needle, size_t nee_len)
@@ -45,7 +69,7 @@ void *memmem_simple(const void *haystack, size_t hay_len,
 }
 
 /* Read from the socket and advance the connection through request parsing states. */
-int request(Connection *c)
+RequestResult request(Connection *c)
 {
     char buffer[BUFFER_LEN];
     ssize_t r = recv(c->fd, buffer, BUFFER_LEN - 1, 0);
@@ -55,13 +79,13 @@ int request(Connection *c)
     }
     if (r == 0)
     {
-        return -1; // should not be -1
+        return REQUEST_RESULT_CLOSE;
     }
     if (r < 0)
     {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
-            return 0;
-        return -1;
+            return REQUEST_RESULT_PENDING;
+        return REQUEST_RESULT_CLOSE;
     }
 
     char *needle_loc;
@@ -72,7 +96,9 @@ int request(Connection *c)
         if (c->buffer_used + r > MAX_HEADER_LENGTH)
         {
             log_error(ERR_HEADER_LENGTH);
-            return -1;
+            prepare_error_response(c, HTTP_STATUS_REQUEST_HEADER_FIELDS_TOO_LARGE, "Request Header Fields Too Large",
+                                   "{\"error\": \"Request headers too large\"}\n");
+            return REQUEST_RESULT_ERROR_RESPONSE;
         }
         memcpy(p, buffer, r);
         c->buffer_used += r;
@@ -86,14 +112,18 @@ int request(Connection *c)
             if (e)
             {
                 log_error(e);
-                return -1;
+                prepare_error_response(c, request_error_status(e), "Bad Request",
+                                       "{\"error\": \"Bad Request\"}\n");
+                return REQUEST_RESULT_ERROR_RESPONSE;
             }
             if (c->content_length)
             {
                 if (c->content_length > MAX_BODY_LENGTH)
                 {
                     log_error(ERR_CONTENT_LENGTH);
-                    return -1;
+                    prepare_error_response(c, HTTP_STATUS_CONTENT_TOO_LARGE, "Content Too Large",
+                                           "{\"error\": \"Request body too large\"}\n");
+                    return REQUEST_RESULT_ERROR_RESPONSE;
                 }
                 int body_idx = needle_loc - c->buffer + 4;
                 c->buffer_used = c->buffer_used - body_idx;
@@ -102,40 +132,46 @@ int request(Connection *c)
                 if (!c->req.body)
                 {
                     perror("body malloc failed");
-                    return -1;
+                    prepare_error_response(c, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error",
+                                           "{\"error\": \"Internal Server Error\"}\n");
+                    return REQUEST_RESULT_ERROR_RESPONSE;
                 }
                 if (c->buffer_used > c->content_length)
                 {
                     log_error(ERR_CONTENT_LENGTH);
-                    return -1;
+                    prepare_error_response(c, HTTP_STATUS_BAD_REQUEST, "Bad Request",
+                                           "{\"error\": \"Bad Request\"}\n");
+                    return REQUEST_RESULT_ERROR_RESPONSE;
                 }
                 memcpy(c->req.body, p, c->buffer_used);
                 if (c->buffer_used == c->content_length)
                 {
                     c->req.body[c->content_length] = '\0';
                     c->state = CONN_PROCESSING;
-                    return 1;
+                    return REQUEST_RESULT_READY;
                 }
 
                 c->state = CONN_READING_BODY;
-                return 0;
+                return REQUEST_RESULT_PENDING;
             }
             c->state = CONN_PROCESSING;
-            return 1;
+            return REQUEST_RESULT_READY;
         }
-        return 0;
+        return REQUEST_RESULT_PENDING;
     case CONN_READING_BODY:
         if (c->buffer_used + r > MAX_BODY_LENGTH)
         {
             log_error(ERR_CONTENT_LENGTH);
-            return -1;
+            prepare_error_response(c, HTTP_STATUS_CONTENT_TOO_LARGE, "Content Too Large",
+                                   "{\"error\": \"Request body too large\"}\n");
+            return REQUEST_RESULT_ERROR_RESPONSE;
         }
         size_t remaining = c->content_length - c->buffer_used;
         if (remaining <= 0)
         {
             c->req.body[c->content_length] = '\0';
             c->state = CONN_PROCESSING;
-            return 1;
+            return REQUEST_RESULT_READY;
         }
         size_t to_copy = (size_t)r > remaining ? remaining : (size_t)r;
         memcpy(c->req.body + c->buffer_used, buffer, to_copy);
@@ -144,12 +180,14 @@ int request(Connection *c)
         {
             c->req.body[c->content_length] = '\0';
             c->state = CONN_PROCESSING;
-            return 1;
+            return REQUEST_RESULT_READY;
         }
-        return 0;
+        return REQUEST_RESULT_PENDING;
     default:
         fprintf(stderr, "Rogue state in request()\n");
-        return -1;
+        prepare_error_response(c, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error",
+                               "{\"error\": \"Internal Server Error\"}\n");
+        return REQUEST_RESULT_ERROR_RESPONSE;
     }
 }
 
@@ -477,16 +515,15 @@ int main()
             }
             if (fds[i].revents & POLLIN)
             {
-                int req_ret = request(&connections[conn_idx]);
+                RequestResult req_ret = request(&connections[conn_idx]);
                 switch (req_ret)
                 {
-                case -1:
-                    perror("read request failed");
+                case REQUEST_RESULT_CLOSE:
                     drop_connection(&fds[i], &connections[conn_idx]);
                     continue;
-                case 0:
+                case REQUEST_RESULT_PENDING:
                     continue;
-                case 1:
+                case REQUEST_RESULT_READY:
                     connections[conn_idx].state = CONN_PROCESSING;
                     pthread_mutex_lock(&connections[conn_idx].mutex);
                     connections[conn_idx].in_flight = 1;
@@ -497,11 +534,23 @@ int main()
                         pthread_mutex_lock(&connections[conn_idx].mutex);
                         connections[conn_idx].in_flight = 0;
                         pthread_mutex_unlock(&connections[conn_idx].mutex);
-                        perror("thread pool queue failed");
-                        drop_connection(&fds[i], &connections[conn_idx]);
+                        prepare_error_response(&connections[conn_idx], HTTP_STATUS_INTERNAL_SERVER_ERROR,
+                                               "Internal Server Error",
+                                               "{\"error\": \"Internal Server Error\"}\n");
+                        fds[i].events = POLLOUT;
                         continue;
                     }
                     fds[i].events = 0;
+                    continue;
+                case REQUEST_RESULT_ERROR_RESPONSE:
+                    fds[i].events = POLLOUT;
+                    continue;
+                default:
+                    fprintf(stderr, "Unknown request result\n");
+                    prepare_error_response(&connections[conn_idx], HTTP_STATUS_INTERNAL_SERVER_ERROR,
+                                           "Internal Server Error",
+                                           "{\"error\": \"Internal Server Error\"}\n");
+                    fds[i].events = POLLOUT;
                     continue;
                 }
             }
@@ -511,12 +560,16 @@ int main()
                 switch (res_ret)
                 {
                 case -1:
-                    perror("response failed");
+                    fprintf(stderr, "response failed for fd %d\n", connections[conn_idx].fd);
                     drop_connection(&fds[i], &connections[conn_idx]);
                     continue;
                 case 0:
                     continue;
                 case 1:
+                    drop_connection(&fds[i], &connections[conn_idx]);
+                    continue;
+                default:
+                    fprintf(stderr, "Unknown response result\n");
                     drop_connection(&fds[i], &connections[conn_idx]);
                     continue;
                 }
