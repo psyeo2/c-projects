@@ -10,6 +10,8 @@
 #include <signal.h>
 #include <poll.h>
 #include <fcntl.h>
+#include <stdint.h>
+#include <sys/eventfd.h>
 
 #include "types.h"
 #include "http_parser.h"
@@ -21,6 +23,8 @@ typedef struct
     int client_fd;
     struct sockaddr_in client_addr;
 } ClientContext;
+
+static int worker_done_fd = -1;
 
 void *memmem_simple(const void *haystack, size_t hay_len,
                     const void *needle, size_t nee_len)
@@ -249,6 +253,12 @@ void process_request(void *arg)
     c->state = CONN_RESPONSE_FLATTEN;
     c->done = 1;
     pthread_mutex_unlock(&c->mutex);
+
+    uint64_t signal_value = 1;
+    if (write(worker_done_fd, &signal_value, sizeof(signal_value)) < 0)
+    {
+        perror("eventfd write failed");
+    }
 }
 
 int main()
@@ -295,11 +305,20 @@ int main()
 
     printf("Server listening on %d\n", port);
 
+    worker_done_fd = eventfd(0, EFD_NONBLOCK);
+    if (worker_done_fd < 0)
+    {
+        perror("eventfd failed");
+        close(socket_fd);
+        return 1;
+    }
+
     // setup thread pool
     tpool_t *thread_pool = tpool_create(NUM_THREADS);
     if (!thread_pool)
     {
         fprintf(stderr, "Thread pool creation failed\n");
+        close(worker_done_fd);
         close(socket_fd);
         return 1;
     }
@@ -308,7 +327,7 @@ int main()
     socklen_t client_addr_len = sizeof(client_addr);
     int client_fd;
 
-    struct pollfd fds[MAX_CLIENTS + 1];
+    struct pollfd fds[MAX_CLIENTS + 2];
     Connection connections[MAX_CLIENTS + 1];
     int flags = fcntl(socket_fd, F_GETFL, 0);
     if (flags == -1)
@@ -319,16 +338,18 @@ int main()
     {
         connection_init(&connections[i]);
     }
-    for (int i = 0; i < MAX_CLIENTS + 1; i++)
+    for (int i = 0; i < MAX_CLIENTS + 2; i++)
     {
         fds[i].fd = -1;
     }
     fds[0].fd = socket_fd;
     fds[0].events = POLLIN;
+    fds[1].fd = worker_done_fd;
+    fds[1].events = POLLIN;
 
     while (1)
     {
-        if (poll(fds, MAX_CLIENTS + 1, TIMEOUT) < 0)
+        if (poll(fds, MAX_CLIENTS + 2, TIMEOUT) < 0)
         {
             perror("poll failed");
             continue;
@@ -349,14 +370,15 @@ int main()
                 continue;
             }
             int assigned = 0;
-            for (int i = 1; i < MAX_CLIENTS + 1; i++)
+            for (int i = 2; i < MAX_CLIENTS + 2; i++)
             {
                 if (fds[i].fd < 0)
                 {
+                    int conn_idx = i - 1;
                     fds[i].fd = client_fd;
                     fds[i].events = POLLIN;
-                    connection_reset(&connections[i]);
-                    connections[i].fd = client_fd;
+                    connection_reset(&connections[conn_idx]);
+                    connections[conn_idx].fd = client_fd;
                     assigned = 1;
                     break;
                 }
@@ -367,56 +389,64 @@ int main()
             // todo: logic for if clients is full? make em wait or at least close the connection
         }
 
-        for (int i = 1; i < MAX_CLIENTS + 1; i++)
+        if (fds[1].revents & POLLIN)
         {
+            uint64_t ready_count;
+            while (read(worker_done_fd, &ready_count, sizeof(ready_count)) > 0)
+            {
+            }
+        }
+
+        for (int i = 2; i < MAX_CLIENTS + 2; i++)
+        {
+            int conn_idx = i - 1;
             if (fds[i].fd == -1)
                 continue;
 
-            pthread_mutex_lock(&connections[i].mutex);
-            if (connections[i].done)
+            pthread_mutex_lock(&connections[conn_idx].mutex);
+            if (connections[conn_idx].done)
             {
-                connections[i].done = 0;
+                connections[conn_idx].done = 0;
                 fds[i].events = POLLOUT;
             }
-            pthread_mutex_unlock(&connections[i].mutex);
+            pthread_mutex_unlock(&connections[conn_idx].mutex);
 
             if (fds[i].revents & (POLLHUP | POLLERR | POLLNVAL))
             {
-                drop_connection(&fds[i], &connections[i]);
+                drop_connection(&fds[i], &connections[conn_idx]);
                 continue;
             }
             if (fds[i].revents & POLLIN)
             {
-                int req_ret = request(&connections[i]);
+                int req_ret = request(&connections[conn_idx]);
                 switch (req_ret)
                 {
                 case -1:
                     perror("read request failed");
-                    drop_connection(&fds[i], &connections[i]);
+                    drop_connection(&fds[i], &connections[conn_idx]);
                     continue;
                 case 0:
                     continue;
                 case 1:
-                    // connections[i].res = router(connections[i].req);
-                    connections[i].state = CONN_PROCESSING;
-                    tpool_add_work(thread_pool, process_request, &connections[i]);
+                    connections[conn_idx].state = CONN_PROCESSING;
+                    tpool_add_work(thread_pool, process_request, &connections[conn_idx]);
                     fds[i].events = 0;
                     continue;
                 }
             }
             if (fds[i].revents & POLLOUT)
             {
-                int res_ret = response(&connections[i]);
+                int res_ret = response(&connections[conn_idx]);
                 switch (res_ret)
                 {
                 case -1:
                     perror("response failed");
-                    drop_connection(&fds[i], &connections[i]);
+                    drop_connection(&fds[i], &connections[conn_idx]);
                     continue;
                 case 0:
                     continue;
                 case 1:
-                    drop_connection(&fds[i], &connections[i]);
+                    drop_connection(&fds[i], &connections[conn_idx]);
                     continue;
                 }
             }
@@ -428,6 +458,7 @@ int main()
         connection_free(&connections[i]);
     }
     tpool_destroy(thread_pool);
+    close(worker_done_fd);
     close(socket_fd);
     return 0;
 }
