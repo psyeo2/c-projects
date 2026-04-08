@@ -36,6 +36,31 @@ int http_response_set_body(HttpResponse *r, const char *body)
     return 0;
 }
 
+/* Set a text response with explicit status and a body owned by the response. */
+int http_response_set_text(HttpResponse *r, HttpStatusCode status, const char *reason, const char *body)
+{
+    http_response_set_status(r, status, reason);
+
+    if (headers_append(&r->headers, "Content-Type: text/plain; charset=utf-8") != OK)
+        goto fail;
+
+    if (http_response_set_body(r, body) != 0)
+        goto fail;
+
+    return 0;
+
+fail:
+    headers_free(&r->headers);
+    headers_init(&r->headers);
+    if (r->body != NULL)
+    {
+        free(r->body);
+        r->body = NULL;
+    }
+    http_response_set_status(r, HTTP_STATUS_INTERNAL_SERVER_ERROR, "Internal Server Error");
+    return -1;
+}
+
 /* Set a JSON response with explicit status and a body owned by the response. */
 int http_response_set_json(HttpResponse *r, HttpStatusCode status, const char *reason, const char *body)
 {
@@ -213,11 +238,19 @@ int path_is(const char *path, const char *prefix)
            (path[len] == '\0' || path[len] == '/');
 }
 
+/* Log a request to the console. */
+void log_request(HttpRequest req)
+{
+    printf("%s %s %s\n", req.request_line.method, req.request_line.target, req.request_line.version);
+}
+
 /* Build the response for a connection by dispatching to the appropriate router. */
 void router(Connection *c)
 {
     HttpResponse res;
     http_response_init(&res);
+
+    log_request(c->req);
 
     if (path_is(c->req.request_line.target, "/ping"))
     {

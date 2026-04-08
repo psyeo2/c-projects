@@ -20,6 +20,8 @@ void http_response_free(HttpResponse *r);
 
 int http_response_set_body(HttpResponse *r, const char *body);
 
+int http_response_set_text(HttpResponse *r, HttpStatusCode status, const char *reason, const char *body);
+
 int http_response_set_json(HttpResponse *r, HttpStatusCode status, const char *reason, const char *body);
 
 char *http_response_flatten(HttpResponse h, size_t *len);
