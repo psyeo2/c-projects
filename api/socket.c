@@ -213,7 +213,27 @@ int get_port()
 void connection_init(Connection *c)
 {
     pthread_mutex_init(&c->mutex, NULL);
+    c->fd = -1;
     c->done = 0;
+    c->in_flight = 0;
+    c->closing = 0;
+    c->state = CONN_READING_HEADERS;
+    c->buffer[0] = '\0';
+    c->buffer_used = 0;
+    c->content_length = 0;
+    parsed_request_init(&c->req);
+    http_response_init(&c->res);
+    c->f_r_len = 0;
+    c->f_r_sent = 0;
+    c->flattened_response = NULL;
+}
+
+/* Clear request/response state so a slot can be reused without recreating its mutex. */
+void connection_clear(Connection *c)
+{
+    c->done = 0;
+    c->in_flight = 0;
+    c->closing = 0;
     c->fd = -1;
     c->state = CONN_READING_HEADERS;
     c->buffer[0] = '\0';
@@ -226,10 +246,9 @@ void connection_init(Connection *c)
     c->flattened_response = NULL;
 }
 
-/* Release all heap-owned resources associated with a connection slot. */
-void connection_free(Connection *c)
+/* Release heap-owned request/response resources for a reusable connection slot. */
+void connection_release(Connection *c)
 {
-    pthread_mutex_destroy(&c->mutex);
     parsed_request_free(&c->req);
     http_response_free(&c->res);
     if (c->flattened_response)
@@ -239,14 +258,31 @@ void connection_free(Connection *c)
 /* Reset a connection slot after a request has completed or failed. */
 void connection_reset(Connection *c)
 {
-    connection_free(c);
-    connection_init(c);
+    connection_release(c);
+    connection_clear(c);
+}
+
+/* Destroy a connection slot and its long-lived mutex at process shutdown. */
+void connection_free(Connection *c)
+{
+    connection_release(c);
+    pthread_mutex_destroy(&c->mutex);
 }
 
 /* Close a client socket and return its poll/connection slot to the free pool. */
 void drop_connection(struct pollfd *pfd, Connection *c)
 {
-    connection_reset(c);
+    pthread_mutex_lock(&c->mutex);
+    if (c->in_flight)
+    {
+        c->closing = 1;
+    }
+    else
+    {
+        connection_reset(c);
+    }
+    pthread_mutex_unlock(&c->mutex);
+
     close(pfd->fd);
     pfd->fd = -1;
     pfd->events = 0;
@@ -259,6 +295,7 @@ void process_request(void *arg)
     router(c);
 
     pthread_mutex_lock(&c->mutex);
+    c->in_flight = 0;
     c->state = CONN_RESPONSE_FLATTEN;
     c->done = 1;
     pthread_mutex_unlock(&c->mutex);
@@ -385,6 +422,11 @@ int main()
                 if (fds[i].fd < 0)
                 {
                     int conn_idx = i - 1;
+                    pthread_mutex_lock(&connections[conn_idx].mutex);
+                    int slot_available = !connections[conn_idx].in_flight;
+                    pthread_mutex_unlock(&connections[conn_idx].mutex);
+                    if (!slot_available)
+                        continue;
                     fds[i].fd = client_fd;
                     fds[i].events = POLLIN;
                     connection_reset(&connections[conn_idx]);
@@ -410,16 +452,23 @@ int main()
         for (int i = 2; i < MAX_CLIENTS + 2; i++)
         {
             int conn_idx = i - 1;
-            if (fds[i].fd == -1)
-                continue;
-
             pthread_mutex_lock(&connections[conn_idx].mutex);
             if (connections[conn_idx].done)
             {
                 connections[conn_idx].done = 0;
-                fds[i].events = POLLOUT;
+                if (connections[conn_idx].closing)
+                {
+                    connection_reset(&connections[conn_idx]);
+                }
+                else
+                {
+                    fds[i].events = POLLOUT;
+                }
             }
             pthread_mutex_unlock(&connections[conn_idx].mutex);
+
+            if (fds[i].fd == -1)
+                continue;
 
             if (fds[i].revents & (POLLHUP | POLLERR | POLLNVAL))
             {
@@ -439,7 +488,19 @@ int main()
                     continue;
                 case 1:
                     connections[conn_idx].state = CONN_PROCESSING;
-                    tpool_add_work(thread_pool, process_request, &connections[conn_idx]);
+                    pthread_mutex_lock(&connections[conn_idx].mutex);
+                    connections[conn_idx].in_flight = 1;
+                    connections[conn_idx].closing = 0;
+                    pthread_mutex_unlock(&connections[conn_idx].mutex);
+                    if (!tpool_add_work(thread_pool, process_request, &connections[conn_idx]))
+                    {
+                        pthread_mutex_lock(&connections[conn_idx].mutex);
+                        connections[conn_idx].in_flight = 0;
+                        pthread_mutex_unlock(&connections[conn_idx].mutex);
+                        perror("thread pool queue failed");
+                        drop_connection(&fds[i], &connections[conn_idx]);
+                        continue;
+                    }
                     fds[i].events = 0;
                     continue;
                 }
