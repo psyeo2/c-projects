@@ -7,6 +7,7 @@
 #include "routers/ping.h"
 #include "routers/users.h"
 
+/* Populate a standard JSON 404 response. */
 void not_found(HttpResponse *h)
 {
     snprintf(h->response_line.version, sizeof(h->response_line.version), "HTTP/1.1");
@@ -18,6 +19,7 @@ void not_found(HttpResponse *h)
     h->body = "{\"error\": \"Not Found\"}\n";
 }
 
+/* Populate a standard JSON 405 response for matched paths with wrong methods. */
 void method_not_allowed(HttpResponse *h)
 {
     snprintf(h->response_line.version, sizeof(h->response_line.version), "HTTP/1.1");
@@ -29,6 +31,7 @@ void method_not_allowed(HttpResponse *h)
     h->body = "{\"error\": \"Method Not Allowed\"}\n";
 }
 
+/* Resolve a route table against a request and dispatch the matched handler. */
 void routes_check(Routes r, HttpRequest req, HttpResponse *res)
 {
     int path_matched = 0;
@@ -56,6 +59,7 @@ void routes_check(Routes r, HttpRequest req, HttpResponse *res)
     }
 }
 
+/* Initialise a response object with a known fallback error state. */
 void http_response_init(HttpResponse *h)
 {
     snprintf(h->response_line.version, sizeof(h->response_line.version), "HTTP/1.1");
@@ -69,6 +73,7 @@ void http_response_init(HttpResponse *h)
     h->body = NULL;
 }
 
+/* Release heap-owned response fields. */
 void http_response_free(HttpResponse *r)
 {
     headers_free(&r->headers);
@@ -77,6 +82,7 @@ void http_response_free(HttpResponse *r)
     //     free(r->body);
 }
 
+/* Serialise an HTTP response struct into a wire-format buffer. */
 char *http_response_flatten(HttpResponse h, size_t *len)
 {
     char *flattened_response;
@@ -142,6 +148,7 @@ char *http_response_flatten(HttpResponse h, size_t *len)
     return flattened_response;
 }
 
+/* Check whether a request path matches a route prefix boundary. */
 int path_is(const char *path, const char *prefix)
 {
     size_t len = strlen(prefix);
@@ -149,6 +156,7 @@ int path_is(const char *path, const char *prefix)
            (path[len] == '\0' || path[len] == '/');
 }
 
+/* Build the response for a connection by dispatching to the appropriate router. */
 void router(Connection *c)
 {
     HttpResponse res;

@@ -26,6 +26,7 @@ typedef struct
 
 static int worker_done_fd = -1;
 
+/* Find the first occurrence of a byte sequence in a fixed-size buffer. */
 void *memmem_simple(const void *haystack, size_t hay_len,
                     const void *needle, size_t nee_len)
 {
@@ -43,6 +44,7 @@ void *memmem_simple(const void *haystack, size_t hay_len,
     return NULL;
 }
 
+/* Read from the socket and advance the connection through request parsing states. */
 int request(Connection *c)
 {
     char buffer[BUFFER_LEN];
@@ -151,6 +153,7 @@ int request(Connection *c)
     }
 }
 
+/* Flatten and send the prepared HTTP response for a connection. */
 int response(Connection *c)
 {
     switch (c->state)
@@ -187,6 +190,7 @@ int response(Connection *c)
     return -1;
 }
 
+/* Read the configured listening port or fall back to the default. */
 int get_port()
 {
     const char *env = getenv("PORT");
@@ -205,6 +209,7 @@ int get_port()
     return port;
 }
 
+/* Initialise a connection slot to its empty ready-for-use state. */
 void connection_init(Connection *c)
 {
     pthread_mutex_init(&c->mutex, NULL);
@@ -221,6 +226,7 @@ void connection_init(Connection *c)
     c->flattened_response = NULL;
 }
 
+/* Release all heap-owned resources associated with a connection slot. */
 void connection_free(Connection *c)
 {
     pthread_mutex_destroy(&c->mutex);
@@ -230,12 +236,14 @@ void connection_free(Connection *c)
         free(c->flattened_response);
 }
 
+/* Reset a connection slot after a request has completed or failed. */
 void connection_reset(Connection *c)
 {
     connection_free(c);
     connection_init(c);
 }
 
+/* Close a client socket and return its poll/connection slot to the free pool. */
 void drop_connection(struct pollfd *pfd, Connection *c)
 {
     connection_reset(c);
@@ -244,6 +252,7 @@ void drop_connection(struct pollfd *pfd, Connection *c)
     pfd->events = 0;
 }
 
+/* Run request routing on a worker thread and notify the poll loop on completion. */
 void process_request(void *arg)
 {
     Connection *c = (Connection *)arg;
@@ -261,6 +270,7 @@ void process_request(void *arg)
     }
 }
 
+/* Accept clients, dispatch request work, and drive response writes from the poll loop. */
 int main()
 {
     int port = get_port();
