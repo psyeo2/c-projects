@@ -12,7 +12,7 @@ void ping(HttpRequest req, HttpResponse *res)
 
     headers_append(&res->headers, "Content-Type: application/json; charset=utf-8");
 
-    res->body = "{\"message\": \"pong\"}\n";
+    http_response_set_body(res, "{\"message\": \"pong\"}\n");
 }
 
 void router_ping(HttpRequest req, HttpResponse *res)

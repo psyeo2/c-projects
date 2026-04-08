@@ -7,6 +7,27 @@
 #include "routers/ping.h"
 #include "routers/users.h"
 
+/* Replace the response body with an owned heap copy of the provided string. */
+int http_response_set_body(HttpResponse *r, const char *body)
+{
+    char *body_copy = NULL;
+
+    if (body != NULL)
+    {
+        size_t body_len = strlen(body);
+        body_copy = malloc(body_len + 1);
+        if (body_copy == NULL)
+            return -1;
+        memcpy(body_copy, body, body_len + 1);
+    }
+
+    if (r->body != NULL)
+        free(r->body);
+
+    r->body = body_copy;
+    return 0;
+}
+
 /* Populate a standard JSON 404 response. */
 void not_found(HttpResponse *h)
 {
@@ -16,7 +37,7 @@ void not_found(HttpResponse *h)
 
     headers_append(&h->headers, "Content-Type: application/json; charset=utf-8");
 
-    h->body = "{\"error\": \"Not Found\"}\n";
+    http_response_set_body(h, "{\"error\": \"Not Found\"}\n");
 }
 
 /* Populate a standard JSON 405 response for matched paths with wrong methods. */
@@ -28,7 +49,7 @@ void method_not_allowed(HttpResponse *h)
 
     headers_append(&h->headers, "Content-Type: application/json; charset=utf-8");
 
-    h->body = "{\"error\": \"Method Not Allowed\"}\n";
+    http_response_set_body(h, "{\"error\": \"Method Not Allowed\"}\n");
 }
 
 /* Resolve a route table against a request and dispatch the matched handler. */
@@ -77,9 +98,9 @@ void http_response_init(HttpResponse *h)
 void http_response_free(HttpResponse *r)
 {
     headers_free(&r->headers);
-    // todo: why does this cause "free(): invalid pointer"
-    // if (r->body)
-    //     free(r->body);
+    if (r->body)
+        free(r->body);
+    r->body = NULL;
 }
 
 /* Serialise an HTTP response struct into a wire-format buffer. */

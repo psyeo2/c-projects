@@ -16,6 +16,8 @@ void http_response_init(HttpResponse *h);
 
 void http_response_free(HttpResponse *r);
 
+int http_response_set_body(HttpResponse *r, const char *body);
+
 char *http_response_flatten(HttpResponse h, size_t *len);
 
 void router(Connection *c);
