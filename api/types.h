@@ -85,6 +85,8 @@ typedef struct
 {
     pthread_mutex_t mutex;
     int done;
+    int in_flight;
+    int closing;
     int fd;
     ConnectionState state;
     char buffer[BUFFER_LEN];
