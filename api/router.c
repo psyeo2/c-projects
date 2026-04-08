@@ -73,6 +73,23 @@ void method_not_allowed(HttpResponse *h)
     http_response_set_json(h, HTTP_STATUS_METHOD_NOT_ALLOWED, "Method Not Allowed", "{\"error\": \"Method Not Allowed\"}\n");
 }
 
+/* Match a route endpoint while tolerating one trailing slash on the request path. */
+int route_matches(const char *target, const char *endpoint)
+{
+    size_t target_len = strlen(target);
+    size_t endpoint_len = strlen(endpoint);
+
+    if (strcmp(target, endpoint) == 0)
+        return 1;
+
+    if (endpoint_len == 1 && endpoint[0] == '/')
+        return target_len == 1 && target[0] == '/';
+
+    return target_len == endpoint_len + 1 &&
+           target[target_len - 1] == '/' &&
+           strncmp(target, endpoint, endpoint_len) == 0;
+}
+
 /* Resolve a route table against a request and dispatch the matched handler. */
 void routes_check(Routes r, HttpRequest req, HttpResponse *res)
 {
@@ -81,7 +98,7 @@ void routes_check(Routes r, HttpRequest req, HttpResponse *res)
     char *target = req.request_line.target;
     for (int i = 0; i < r.route_count; i++)
     {
-        if (strcmp(target, r.routes[i].endpoint) == 0)
+        if (route_matches(target, r.routes[i].endpoint))
         {
             path_matched = 1;
             if (strcmp(method, r.routes[i].method) == 0)
